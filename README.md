@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # grifoapp
 
 A new Flutter project.
@@ -15,3 +16,6 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+=======
+# Proyecto-APT-Grifos
+>>>>>>> 7e99bf1b5b84dfc6c475b8013973676bc2b68a4e
