@@ -8,7 +8,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:grifoapp/main.dart';
 import 'package:grifoapp/screens/mapa_screen.dart';
 
 void main() {

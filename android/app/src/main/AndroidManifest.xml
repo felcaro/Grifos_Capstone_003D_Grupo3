@@ -30,6 +30,11 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Google Maps API Key inyectada desde local.properties (ignorado en git) -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${mapsApiKey}" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
@@ -42,21 +47,4 @@
             <data android:mimeType="text/plain"/>
         </intent>
     </queries>
-</manifest>
-
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application
-        android:label="grifoapp"
-        android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
-        
-        <!-- PEGA ESTO AQUÍ: Reemplaza TU_API_KEY por tu clave de Google Cloud -->
-        <meta-data android:name="com.google.android.geo.API_KEY"
-                   android:value="AIzaSyD5qDql9H9hR167TfAHRm40yRcnzaSS8ZU"/>
-                   
-        <activity
-            android:name=".MainActivity"
-            <!-- más código aquí... -->
-        </activity>
-    </application>
 </manifest>
