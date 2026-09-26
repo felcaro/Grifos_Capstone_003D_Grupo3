@@ -4,8 +4,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../services/supabase_service.dart';
 import '../services/auth_service.dart';
+import '../screens/tesoreria_screen.dart'; // Si está en lib/ ajusta la ruta
 
 class MapaPrincipal extends StatefulWidget {
+  
   const MapaPrincipal({super.key});
 
   @override
@@ -137,9 +139,10 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                   _cargarGrifos();
                 }
               } catch (e) {
-                if (context.mounted)
+                if (context.mounted){
                   ScaffoldMessenger.of(context)
                       .showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
               }
             },
             child: const Text('Guardar'),
@@ -214,9 +217,10 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                   _cargarGrifos(); // Recargamos el mapa
                 }
               } catch (e) {
-                if (context.mounted)
+                if (context.mounted){
                   ScaffoldMessenger.of(context)
                       .showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
               }
             },
             child: const Text('Actualizar'),
@@ -302,23 +306,42 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
               const Text('Bombero - Melipilla', style: TextStyle(color: Colors.grey, fontSize: 16)),
               const SizedBox(height: 20),
               const Divider(),
+              // ============================================================================
+              // ELEMENTO DE MENÚ: Acceso al módulo de Tesorería
+              // ============================================================================
               ListTile(
-                leading: const Icon(Icons.settings),
-                title: const Text('Configuración (Próximamente)'),
+                leading: const Icon(Icons.account_balance_wallet, color: Colors.red),
+                title: const Text('Tesorería'),
+                subtitle: const Text('Rendición de cuentas e ingresos/gastos'),
                 onTap: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En construcción 🚧')));
+                  // 1. Cierra el menú lateral (Drawer)
+                  Navigator.pop(context); 
+
+                  // 2. Navega hacia la pantalla de Tesorería
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => TesoreriaScreen()),
+                  );
                 },
               ),
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.logout, color: Colors.red),
-                title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                onTap: () {
-                  Navigator.pop(context); // Cierra este panel inferior
-                  _confirmarCerrarSesion(); // Llama a la alerta de confirmación
+                title: const Text(
+                  'Cerrar Sesión', 
+                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)
+                ),
+                onTap: () async {
+                  Navigator.pop(context); // Cierra el modal
+                  await AuthService.signOut(); // o Supabase.instance.client.auth.signOut();
+                  if (context.mounted) {
+                    // Redirige al Login
+                    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+                  }
                 },
               ),
+
+              // ============================================================================
             ],
           ),
         );
@@ -327,7 +350,7 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
   }
 
   // Alerta de confirmación para salir
-  void _confirmarCerrarSesion() {
+  void confirmarCerrarSesion() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
