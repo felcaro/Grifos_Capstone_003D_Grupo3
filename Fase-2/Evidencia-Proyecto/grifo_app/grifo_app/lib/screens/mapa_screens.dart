@@ -31,6 +31,9 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
   List<Map<String, dynamic>> _listaGrifos = [];
   String? _grifoSeleccionadoId;
 
+  // Controlador de Google Maps para mover la cámara y centrar el grifo encontrado
+  GoogleMapController? _mapController;
+
   @override
   void initState() {
     super.initState();
@@ -126,7 +129,8 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
           ElevatedButton(
             onPressed: () async {
               try {
-                await _dbService.insertarGrifoPrueba(
+                // CAMBIO AQUÍ: Llamando al nuevo nombre insertarGrifo
+                await _dbService.insertarGrifo(
                   double.parse(latController.text),
                   double.parse(lngController.text),
                   dirController.text,
@@ -411,6 +415,69 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
     );
   }
 
+  // Mueve la cámara suavemente al grifo y lo deja seleccionado para acciones rápidas
+  void _moverCamaraYSeleccionar(Map<String, dynamic> grifo) {
+    final lat = double.parse(grifo['latitud'].toString());
+    final lng = double.parse(grifo['longitud'].toString());
+    final id = grifo['id'].toString();
+
+    _mapController?.animateCamera(
+      CameraUpdate.newLatLngZoom(LatLng(lat, lng), 18.0),
+    );
+
+    setState(() {
+      _grifoSeleccionadoId = id;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('📍 Ubicando: ${grifo['direccion_referencial']}')),
+    );
+  }
+
+  // Despliega un panel inferior con la lista de resultados cuando hay 2 o más coincidencias
+  void _mostrarListaResultados(List<Map<String, dynamic>> resultados) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min, // Se adapta al contenido
+            children: [
+              const Text(
+                'Grifos encontrados',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const Divider(),
+              // Flexible evita que la lista desborde la pantalla en caso de muchas coincidencias
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: resultados.length,
+                  itemBuilder: (context, index) {
+                    final grifo = resultados[index];
+                    return ListTile(
+                      leading: const Icon(Icons.location_on, color: Colors.red),
+                      title: Text(grifo['direccion_referencial'] ?? 'Sin dirección'),
+                      subtitle: Text('Lat: ${grifo['latitud']} - Lng: ${grifo['longitud']}'),
+                      onTap: () {
+                        Navigator.pop(context); // Cerramos el panel
+                        _moverCamaraYSeleccionar(grifo); // Viajamos al grifo tocado
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -421,6 +488,10 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
             markers: _marcadores,
+            // Capturamos el controlador apenas el mapa termina de cargar
+            onMapCreated: (GoogleMapController controller) {
+              _mapController = controller;
+            },
           ),
           // 2. LA BARRA DE BÚSQUEDA Y EL PERFIL
           SafeArea(
@@ -447,20 +518,24 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                         ),
                         onSubmitted: (valor) async {
                           if (valor.trim().isEmpty) return;
+                          
                           final resultados = await _dbService.buscarGrifoPorDireccion(valor);
+                          
                           if (!context.mounted) return;
-                          if (resultados.isNotEmpty) {
+                          
+                          if (resultados.isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Grifo encontrado en: ${resultados.first['direccion_referencial']}',
-                                ),
-                              ),
+                              const SnackBar(content: Text('No se encontraron grifos con esa dirección')),
                             );
+                            return;
+                          }
+
+                          if (resultados.length == 1) {
+                            // Si es solo uno, viajamos directo para ahorrar tiempo en la emergencia
+                            _moverCamaraYSeleccionar(resultados.first);
                           } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('No se encontraron grifos')),
-                            );
+                            // Si hay 2 o más, mostramos el panel para que el bombero elija
+                            _mostrarListaResultados(resultados);
                           }
                         },
                       ),

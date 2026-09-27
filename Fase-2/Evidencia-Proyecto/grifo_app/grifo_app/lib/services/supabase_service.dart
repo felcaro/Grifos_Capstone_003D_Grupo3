@@ -8,26 +8,41 @@ class SupabaseService {
   // MÓDULO GRIFOS
   // ==========================================================================
 
-  // Insertar un grifo
-  Future<void> insertarGrifoPrueba(
-    double lat,
-    double lng,
-    String direccion,
-  ) async {
+  // ==========================================================================
+  // INSERTAR GRIFO (CON BYPASS DE UUIDs)
+  // ==========================================================================
+  Future<void> insertarGrifoPrueba(double lat, double lng, String direccion) async {
     await _client.from('grifo').insert({
-      'sector_id': '22222222-2222-2222-2222-222222222222',
-      'creado_por': '33333333-3333-3333-3333-333333333333',
       'latitud': lat,
       'longitud': lng,
       'direccion_referencial': direccion,
+      // BYPASS: Enviamos las IDs fijas que ya existen en tu Supabase
+      // Recuerda reemplazar los textos entre comillas con los UUIDs reales copiados de tu base de datos:
+      'creado_por': '58abe9c4-c64e-414a-8ccb-b926357bd97c', 
+      'sector_id': 'a24a10bd-cb20-4bab-8bcd-7228c7a8eb68',
     });
   }
+
+  // Alias para mantener compatibilidad si se llama como insertarGrifo
+  Future<void> insertarGrifo(double lat, double lng, String direccion) =>
+      insertarGrifoPrueba(lat, lng, direccion);
+
 
   // Traer todos los grifos
   Future<List<Map<String, dynamic>>> obtenerGrifos() async {
     final respuesta = await _client
         .from('grifo')
         .select('id, latitud, longitud, direccion_referencial');
+    return respuesta;
+  }
+
+  // Buscador de grifos por coincidencia de texto en la dirección referencial
+  // (ilike no discrimina entre mayúsculas y minúsculas)
+  Future<List<Map<String, dynamic>>> buscarGrifoPorDireccion(String texto) async {
+    final respuesta = await _client
+        .from('grifo')
+        .select()
+        .ilike('direccion_referencial', '%$texto%');
     return respuesta;
   }
 
@@ -48,20 +63,6 @@ class SupabaseService {
         .eq('id', id);
   }
 
-  // Buscar grifos por su dirección referencial
-  Future<List<Map<String, dynamic>>> buscarGrifoPorDireccion(String textoBusqueda) async {
-    try {
-      final respuesta = await _client
-          .from('grifo')
-          .select('id, latitud, longitud, direccion_referencial');
-      
-      print('>>> RESPUESTA DE SUPABASE: $respuesta');
-      return respuesta;
-    } catch (e) {
-      print('>>> ERROR REAL AL BUSCAR: $e');
-      return [];
-    }
-  }
 
   // ==========================================================================
   // MÓDULO TESORERÍA
