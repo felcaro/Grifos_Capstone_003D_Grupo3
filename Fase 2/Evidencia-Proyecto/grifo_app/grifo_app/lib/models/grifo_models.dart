@@ -101,7 +101,8 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
           ElevatedButton(
             onPressed: () async {
               try {
-                await _dbService.insertarGrifoPrueba(
+                // CAMBIO AQUÍ: Llamando al nuevo nombre insertarGrifo
+                await _dbService.insertarGrifo(
                   double.parse(latController.text),
                   double.parse(lngController.text),
                   dirController.text,
