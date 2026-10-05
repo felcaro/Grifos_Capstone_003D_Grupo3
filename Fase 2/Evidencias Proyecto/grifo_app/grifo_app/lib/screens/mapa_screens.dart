@@ -5,6 +5,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/supabase_service.dart';
 import '../services/auth_service.dart';
 import '../screens/tesoreria_screen.dart'; // Si está en lib/ ajusta la ruta
+import '../screens/acta_form_screen.dart';
+import '../screens/inventario_carro_screen.dart';
+import '../screens/entrega_epp_form_screen.dart';
 
 class MapaPrincipal extends StatefulWidget {
   
@@ -286,13 +289,17 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true, // permite que el panel crezca y se pueda desplazar
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
             mainAxisSize: MainAxisSize.min, // Se adapta al contenido
             children: [
               const CircleAvatar(
@@ -328,6 +335,51 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                   );
                 },
               ),
+              // ============================================================================
+              // ELEMENTO DE MENÚ: Acceso al módulo de Actas
+              // ============================================================================
+              ListTile(
+                leading: const Icon(Icons.menu_book, color: Colors.red),
+                title: const Text('Actas'),
+                subtitle: const Text('Registrar acta de reunión de Directorio'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ActaFormScreen()),
+                  );
+                },
+              ),
+              // ============================================================================
+              // ELEMENTO DE MENÚ: Acceso al módulo de Inventario de Carros
+              // ============================================================================
+              ListTile(
+                leading: const Icon(Icons.fire_truck, color: Colors.red),
+                title: const Text('Inventario de Carros'),
+                subtitle: const Text('Material menor por compartimento'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const InventarioCarrosScreen()),
+                  );
+                },
+              ),
+              // ============================================================================
+              // ELEMENTO DE MENÚ: Acceso al Registro de Entrega de EPP
+              // ============================================================================
+              ListTile(
+                leading: const Icon(Icons.checklist, color: Colors.red),
+                title: const Text('Entrega de EPP'),
+                subtitle: const Text('Registro de entrega de equipo de protección personal'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const EntregaEppFormScreen()),
+                  );
+                },
+              ),
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.logout, color: Colors.red),
@@ -347,6 +399,8 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
 
               // ============================================================================
             ],
+              ),
+            ),
           ),
         );
       },
