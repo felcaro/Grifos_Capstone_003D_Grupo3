@@ -107,7 +107,7 @@ class ActaPdfService {
     if (firma == null) {
       return pw.Column(children: [
         pw.Container(width: 160, height: 1, color: PdfColors.black, margin: const pw.EdgeInsets.only(bottom: 4)),
-        const pw.Text('_______________', style: pw.TextStyle(fontSize: 11)),
+        pw.Text('_______________', style: const pw.TextStyle(fontSize: 11)),
         pw.Text(cargo, style: const pw.TextStyle(fontSize: 10)),
       ]);
     }
@@ -126,7 +126,7 @@ class ActaPdfService {
         pw.Text(firma.nombreVerificado, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
         if (!firma.esFoto && firma.rut != null) pw.Text('RUT: ${firma.rut}', style: const pw.TextStyle(fontSize: 9)),
         pw.Text(cargo, style: const pw.TextStyle(fontSize: 10)),
-        pw.Text('Identidad verificada ✓', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600, fontStyle: pw.FontStyle.italic)),
+        pw.Text('(identidad verificada)', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600, fontStyle: pw.FontStyle.italic)),
       ],
     );
   }
