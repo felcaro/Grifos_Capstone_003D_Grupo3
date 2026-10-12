@@ -107,7 +107,6 @@ class ActaPdfService {
     if (firma == null) {
       return pw.Column(children: [
         pw.Container(width: 160, height: 1, color: PdfColors.black, margin: const pw.EdgeInsets.only(bottom: 4)),
-        pw.Text('_______________', style: const pw.TextStyle(fontSize: 11)),
         pw.Text(cargo, style: const pw.TextStyle(fontSize: 10)),
       ]);
     }

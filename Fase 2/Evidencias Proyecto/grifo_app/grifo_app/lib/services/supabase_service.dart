@@ -10,17 +10,41 @@ class SupabaseService {
   // ==========================================================================
 
   // ==========================================================================
-  // INSERTAR GRIFO (CON BYPASS DE UUIDs)
+  // INSERTAR GRIFO
   // ==========================================================================
   Future<void> insertarGrifoPrueba(double lat, double lng, String direccion) async {
+    // 1. Rescatamos al usuario que ya inició sesión
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('Debes iniciar sesión para registrar un grifo');
+    }
+
+    // 2. Usamos la función que ya tienes para obtener la ID de su compañía
+    final companiaId = await obtenerCompaniaIdUsuarioActual();
+    if (companiaId == null) {
+      throw Exception('El usuario no tiene una compañía asignada');
+    }
+
+    // 3. Vamos a la tabla 'compania' para preguntarle a qué sector pertenece
+    final companiaData = await _client
+        .from('compania_bomberos')
+        .select('sector_id')
+        .eq('id', companiaId)
+        .single();
+        
+    final sectorIdReal = companiaData['sector_id'];
+
+    if (sectorIdReal == null) {
+      throw Exception('La compañía no tiene un sector asignado en la base de datos');
+    }
+
+    // 4. ¡Todo listo! Guardamos el grifo con las IDs reales
     await _client.from('grifo').insert({
       'latitud': lat,
       'longitud': lng,
       'direccion_referencial': direccion,
-      // BYPASS: Enviamos las IDs fijas que ya existen en tu Supabase
-      // Recuerda reemplazar los textos entre comillas con los UUIDs reales copiados de tu base de datos:
-      'creado_por': '58abe9c4-c64e-414a-8ccb-b926357bd97c', 
-      'sector_id': 'a24a10bd-cb20-4bab-8bcd-7228c7a8eb68',
+      'creado_por': user.id,        // ID real del bombero
+      'sector_id': sectorIdReal,    // ID real del sector (Melipilla o Alhué) calculado automáticamente
     });
   }
 
@@ -284,5 +308,47 @@ class SupabaseService {
       'compania_id': companiaId,
       'creado_por': _client.auth.currentUser?.id,
     });
+  }
+
+  // ==========================================================================
+  // MÓDULO GESTIÓN DE ESTADO DE GRIFOS Y REPORTES
+  // ==========================================================================
+
+  // Función para cambiar el estado y guardar el reporte de lo que se le hizo
+  Future<void> actualizarEstadoGrifo(String grifoId, String nuevoEstado, String detalleTrabajo) async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw Exception('Debes iniciar sesión');
+
+    // 1. Actualiza el estado en la tabla grifo
+    await _client.from('grifo').update({
+      'estado': nuevoEstado, 
+      'ultima_revision': DateTime.now().toIso8601String(),
+    }).eq('id', grifoId);
+
+    // 2. Guarda el reporte en la tabla reporte_falla
+    await _client.from('reporte_falla').insert({
+      'grifo_id': grifoId,
+      'usuario_id': user.id,
+      'detalle': detalleTrabajo,
+      'tipo_falla': nuevoEstado == 'inhabilitado' ? 'falla_reportada' : 'mantenimiento',
+    });
+  }
+
+  // Función para obtener solo los grifos operativos
+  Future<List<dynamic>> obtenerGrifosOperativos() async {
+    final respuesta = await _client
+        .from('grifo')
+        .select()
+        .eq('estado', 'operativo');
+    return respuesta;
+  }
+
+  // Función para obtener solo los grifos inhabilitados
+  Future<List<dynamic>> obtenerGrifosInhabilitados() async {
+    final respuesta = await _client
+        .from('grifo')
+        .select()
+        .eq('estado', 'inhabilitado');
+    return respuesta;
   }
 }
