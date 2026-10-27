@@ -456,4 +456,29 @@ class SupabaseService {
   Future<void> eliminarEquipoPersonal(String id) async {
     await _client.from('equipo_personal').delete().eq('id', id);
   }
+
+  // ==========================================================================
+  // ADMINISTRACIÓN DE USUARIOS (solo rol administrador)
+  // ==========================================================================
+
+  // Personas de la compañía con su correo y rol (para la pantalla de administración)
+  Future<List<Map<String, dynamic>>> obtenerUsuariosAdmin() async {
+    final companiaId = await obtenerCompaniaIdUsuarioActual();
+    if (companiaId == null) return [];
+    return await _client
+        .from('usuario')
+        .select('id, nombre, credencial, rol')
+        .eq('compania_id', companiaId)
+        .order('nombre');
+  }
+
+  // Cambia el rol de una persona. La validación real (que quien llama sea
+  // administrador, que sea de la misma compañía, etc.) la hace la función
+  // cambiar_rol_usuario en la base de datos.
+  Future<void> cambiarRolUsuario(String usuarioId, String nuevoRol) async {
+    await _client.rpc('cambiar_rol_usuario', params: {
+      'objetivo': usuarioId,
+      'nuevo_rol': nuevoRol,
+    });
+  }
 }

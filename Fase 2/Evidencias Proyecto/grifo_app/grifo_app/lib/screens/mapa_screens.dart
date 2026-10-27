@@ -9,6 +9,7 @@ import '../screens/acta_form_screen.dart';
 import '../screens/inventario_carro_screen.dart';
 import '../screens/lista_grifos_screen.dart';
 import '../screens/personal_screen.dart';
+import '../screens/admin_usuarios_screen.dart';
 // [MODULO_EPP_COMENTADO] Descomentar la siguiente línea cuando se implemente lib/services/entrega_epp_pdf_service.dart
 // import '../screens/entrega_epp_form_screen.dart';
 
@@ -545,9 +546,21 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
   // ===========================================================================
 
   // Función para mostrar el panel de perfil inferior (ModalBottomSheet)
-  void _mostrarMenuPerfil() {
+  Future<void> _mostrarMenuPerfil() async {
     // Obtenemos el correo del usuario con el que se inició sesión (desde Supabase Auth o modo demo)
     final String emailUsuario = AuthService.currentEmail ?? 'test@gmail.com';
+
+    // Perfil real (nombre y rol) para mostrarlo y decidir si ve la administración
+    Map<String, dynamic>? perfil;
+    try {
+      perfil = await SupabaseService().obtenerMiPerfil();
+    } catch (_) {
+      perfil = null;
+    }
+    if (!mounted) return;
+    final String rolPerfil = (perfil?['rol'] ?? '').toString().toLowerCase();
+    final bool esAdmin = rolPerfil == 'administrador';
+    final String nombrePerfil = (perfil?['nombre'] ?? '').toString();
 
     showModalBottomSheet(
       context: context,
@@ -576,7 +589,12 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
-              const Text('Bombero - Melipilla', style: TextStyle(color: Colors.grey, fontSize: 16)),
+              Text(
+                perfil == null
+                    ? 'Bombero - Melipilla'
+                    : '${nombrePerfil.isNotEmpty ? nombrePerfil : 'Usuario'} · ${etiquetaRol(rolPerfil)}',
+                style: const TextStyle(color: Colors.grey, fontSize: 16),
+              ),
               const SizedBox(height: 20),
               const Divider(),
               // ============================================================================
@@ -642,6 +660,22 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                   );
                 },
               ),
+              // ============================================================================
+              // ELEMENTO DE MENÚ: Administración de usuarios (solo administradores)
+              // ============================================================================
+              if (esAdmin)
+                ListTile(
+                  leading: const Icon(Icons.admin_panel_settings, color: Colors.red),
+                  title: const Text('Administración'),
+                  subtitle: const Text('Usuarios y roles de la compañía'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const AdminUsuariosScreen()),
+                    );
+                  },
+                ),
               // ============================================================================
               // ELEMENTO DE MENÚ: Acceso a Lista y Estado de Grifos
               // ============================================================================
