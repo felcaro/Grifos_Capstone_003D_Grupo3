@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final String appTitle;
@@ -26,7 +27,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController(text: 'test123456');
 
   bool _cargando = false;
-  bool _esRegistro = false;
   String? _error;
 
   @override
@@ -67,24 +67,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final client = Supabase.instance.client;
-      if (_esRegistro) {
-        await client.auth.signUp(
-          email: email,
-          password: password,
-        );
-        if (mounted) {
-          setState(() {
-            _esRegistro = false;
-            _error =
-                'Cuenta creada con éxito. Si tu proyecto requiere confirmación, revisa tu correo antes de iniciar sesión.';
-          });
-        }
-      } else {
-        await client.auth.signInWithPassword(
-          email: email,
-          password: password,
-        );
-      }
+      await client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
     } on AuthException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
@@ -185,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           )
                         : Text(
-                            _esRegistro ? 'Crear cuenta' : 'Iniciar sesión',
+                            'Iniciar sesión',
                             style: const TextStyle(fontSize: 16),
                           ),
                   ),
@@ -193,15 +179,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextButton(
                     onPressed: _cargando
                         ? null
-                        : () => setState(() {
-                              _esRegistro = !_esRegistro;
-                              _error = null;
-                            }),
-                    child: Text(
-                      _esRegistro
-                          ? '¿Ya tienes cuenta? Inicia sesión'
-                          : '¿No tienes cuenta? Regístrate',
-                    ),
+                        : () => Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                            ),
+                    child: const Text('¿No tienes cuenta? Regístrate'),
                   ),
                 ],
               ),

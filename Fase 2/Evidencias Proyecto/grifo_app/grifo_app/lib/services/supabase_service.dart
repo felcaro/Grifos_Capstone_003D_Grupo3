@@ -257,20 +257,40 @@ class SupabaseService {
         .order('orden');
   }
 
-  Future<void> actualizarItem(String itemId, {int? cantidad, String? estado, String? observacion}) async {
+  // Actualiza un ítem. fechaCompra va en formato yyyy-MM-dd; vidaUtilAnios es la
+  // vida útil en años (por defecto 10, ej. trajes de bombero).
+  Future<void> actualizarItem(
+    String itemId, {
+    int? cantidad,
+    String? estado,
+    String? observacion,
+    String? fechaCompra,
+    int? vidaUtilAnios,
+  }) async {
     final datos = <String, dynamic>{'actualizado_en': DateTime.now().toIso8601String()};
     if (cantidad != null) datos['cantidad'] = cantidad;
     if (estado != null) datos['estado'] = estado;
     if (observacion != null) datos['observacion'] = observacion;
+    if (fechaCompra != null) datos['fecha_compra'] = fechaCompra;
+    if (vidaUtilAnios != null) datos['vida_util_anios'] = vidaUtilAnios;
     await _client.from('item_inventario').update(datos).eq('id', itemId);
   }
 
-  Future<void> agregarItem(String compartimentoId, String nombre, int cantidad, String estado) async {
+  Future<void> agregarItem(
+    String compartimentoId,
+    String nombre,
+    int cantidad,
+    String estado, {
+    String? fechaCompra,
+    int vidaUtilAnios = 10,
+  }) async {
     await _client.from('item_inventario').insert({
       'compartimento_id': compartimentoId,
       'nombre': nombre,
       'cantidad': cantidad,
       'estado': estado,
+      'fecha_compra': fechaCompra,
+      'vida_util_anios': vidaUtilAnios,
     });
   }
 
@@ -350,5 +370,90 @@ class SupabaseService {
         .select()
         .eq('estado', 'inhabilitado');
     return respuesta;
+  }
+
+  // ==========================================================================
+  // REGISTRO Y PERFIL
+  // ==========================================================================
+
+  // Compañías disponibles para elegir al registrarse (se lee sin sesión iniciada)
+  Future<List<Map<String, dynamic>>> obtenerCompanias() async {
+    return await _client.from('compania_bomberos').select('id, nombre, comuna').order('nombre');
+  }
+
+  // Perfil del usuario que inició sesión (nombre, rol y compañía)
+  Future<Map<String, dynamic>?> obtenerMiPerfil() async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return null;
+    return await _client.from('usuario').select('id, nombre, rol, compania_id').eq('id', uid).maybeSingle();
+  }
+
+  // ==========================================================================
+  // MÓDULO EQUIPO DEL PERSONAL (trajes y cosas personales de cada bombero)
+  // ==========================================================================
+
+  // Personas de la compañía del usuario actual
+  Future<List<Map<String, dynamic>>> obtenerPersonal() async {
+    final companiaId = await obtenerCompaniaIdUsuarioActual();
+    if (companiaId == null) return [];
+    return await _client.from('usuario').select('id, nombre, rol').eq('compania_id', companiaId).order('nombre');
+  }
+
+  // Datos mínimos de todo el equipo visible (para el resumen por persona)
+  Future<List<Map<String, dynamic>>> obtenerResumenEquipo() async {
+    return await _client.from('equipo_personal').select('usuario_id, fecha_compra, vida_util_anios');
+  }
+
+  Future<List<Map<String, dynamic>>> obtenerEquipoPersonal(String usuarioId) async {
+    return await _client.from('equipo_personal').select().eq('usuario_id', usuarioId).order('categoria').order('nombre');
+  }
+
+  Future<void> agregarEquipoPersonal({
+    required String usuarioId,
+    required String categoria,
+    required String nombre,
+    String? detalle,
+    required String estado,
+    String? fechaCompra, // yyyy-MM-dd
+    int vidaUtilAnios = 10,
+    String? observacion,
+  }) async {
+    await _client.from('equipo_personal').insert({
+      'usuario_id': usuarioId,
+      'categoria': categoria,
+      'nombre': nombre,
+      'detalle': detalle,
+      'estado': estado,
+      'fecha_compra': fechaCompra,
+      'vida_util_anios': vidaUtilAnios,
+      'observacion': observacion,
+      'asignado_por': _client.auth.currentUser?.id,
+    });
+  }
+
+  Future<void> actualizarEquipoPersonal(
+    String id, {
+    required String categoria,
+    required String nombre,
+    String? detalle,
+    required String estado,
+    String? fechaCompra,
+    int vidaUtilAnios = 10,
+    String? observacion,
+  }) async {
+    await _client.from('equipo_personal').update({
+      'categoria': categoria,
+      'nombre': nombre,
+      'detalle': detalle,
+      'estado': estado,
+      'fecha_compra': fechaCompra,
+      'vida_util_anios': vidaUtilAnios,
+      'observacion': observacion,
+      'actualizado_en': DateTime.now().toIso8601String(),
+    }).eq('id', id);
+  }
+
+  Future<void> eliminarEquipoPersonal(String id) async {
+    await _client.from('equipo_personal').delete().eq('id', id);
   }
 }

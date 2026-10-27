@@ -26,6 +26,22 @@ class AuthService {
     testSessionNotifier.value = active;
   }
 
+  /// Registra una cuenta nueva en Supabase Auth. El nombre y la compañía viajan
+  /// como metadatos: un trigger en la base de datos crea la fila en "usuario"
+  /// (con rol "bombero") a partir de ellos. Ver registro_y_personal.sql.
+  static Future<AuthResponse> registrar({
+    required String email,
+    required String password,
+    required String nombre,
+    required String companiaId,
+  }) {
+    return _client.auth.signUp(
+      email: email,
+      password: password,
+      data: {'nombre': nombre, 'compania_id': companiaId},
+    );
+  }
+
   /// Cierra la sesión activa.
   static Future<void> signOut() async {
     testSessionNotifier.value = false;

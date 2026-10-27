@@ -8,6 +8,7 @@ import '../screens/tesoreria_screen.dart'; // Si está en lib/ ajusta la ruta
 import '../screens/acta_form_screen.dart';
 import '../screens/inventario_carro_screen.dart';
 import '../screens/lista_grifos_screen.dart';
+import '../screens/personal_screen.dart';
 // [MODULO_EPP_COMENTADO] Descomentar la siguiente línea cuando se implemente lib/services/entrega_epp_pdf_service.dart
 // import '../screens/entrega_epp_form_screen.dart';
 
@@ -623,6 +624,21 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => const InventarioCarrosScreen()),
+                  );
+                },
+              ),
+              // ============================================================================
+              // ELEMENTO DE MENÚ: Equipo del Personal (trajes y cosas personales)
+              // ============================================================================
+              ListTile(
+                leading: const Icon(Icons.badge, color: Colors.red),
+                title: const Text('Equipo del Personal'),
+                subtitle: const Text('Trajes y equipo personal de cada bombero'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const PersonalScreen()),
                   );
                 },
               ),
