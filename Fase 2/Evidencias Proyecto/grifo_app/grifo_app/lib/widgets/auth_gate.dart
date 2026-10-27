@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../screens/login_screen.dart';
-import '../services/auth_service.dart';
 
 /// Controla la navegación automática según el estado de la sesión:
 /// - Si el usuario está autenticado -> Muestra [home].
@@ -18,31 +17,22 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: AuthService.testSessionNotifier,
-      builder: (context, isTestActive, _) {
-        if (isTestActive) {
+    return StreamBuilder<AuthState>(
+      stream: Supabase.instance.client.auth.onAuthStateChange,
+      builder: (context, snapshot) {
+        // Obtenemos la sesión actual de Supabase
+        final session = Supabase.instance.client.auth.currentSession;
+
+        if (session != null) {
           return home;
         }
 
-        return StreamBuilder<AuthState>(
-          stream: Supabase.instance.client.auth.onAuthStateChange,
-          builder: (context, snapshot) {
-            // Obtenemos la sesión actual de Supabase
-            final session = Supabase.instance.client.auth.currentSession;
-
-            if (session != null) {
-              return home;
-            }
-
-            return loginScreen ??
-                const LoginScreen(
-                  appTitle: 'GrifoApp',
-                  appIcon: Icons.local_fire_department,
-                  primaryColor: Colors.red,
-                );
-          },
-        );
+        return loginScreen ??
+            const LoginScreen(
+              appTitle: 'GrifoApp',
+              appIcon: Icons.local_fire_department,
+              primaryColor: Colors.red,
+            );
       },
     );
   }

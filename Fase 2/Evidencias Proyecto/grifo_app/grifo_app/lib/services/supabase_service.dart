@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/movimiento_tesoreria.dart';
 
@@ -52,7 +53,6 @@ class SupabaseService {
   Future<void> insertarGrifo(double lat, double lng, String direccion) =>
       insertarGrifoPrueba(lat, lng, direccion);
 
-
   // Traer todos los grifos
   Future<List<Map<String, dynamic>>> obtenerGrifos() async {
     final respuesta = await _client
@@ -87,7 +87,6 @@ class SupabaseService {
         })
         .eq('id', id);
   }
-
 
   // ==========================================================================
   // MÓDULO TESORERÍA
@@ -334,24 +333,81 @@ class SupabaseService {
   // MÓDULO GESTIÓN DE ESTADO DE GRIFOS Y REPORTES
   // ==========================================================================
 
-  // Función para cambiar el estado y guardar el reporte de lo que se le hizo
-  Future<void> actualizarEstadoGrifo(String grifoId, String nuevoEstado, String detalleTrabajo) async {
+  Future<void> actualizarEstadoYReportar({
+    required String grifoId,
+    required String nuevoEstado,
+    required String detalle,
+    XFile? fotoXFile,
+  }) async {
     final user = _client.auth.currentUser;
     if (user == null) throw Exception('Debes iniciar sesión');
 
-    // 1. Actualiza el estado en la tabla grifo
-    await _client.from('grifo').update({
-      'estado': nuevoEstado, 
-      'ultima_revision': DateTime.now().toIso8601String(),
-    }).eq('id', grifoId);
+    String? urlDeLaFoto;
 
-    // 2. Guarda el reporte en la tabla reporte_falla
+    // 1. Si el usuario seleccionó una foto, la subimos en formato de bytes (compatible con Web y Móvil)
+    if (fotoXFile != null) {
+      final nombreArchivo = '${DateTime.now().millisecondsSinceEpoch}_${user.id}.jpg';
+      
+      final bytes = await fotoXFile.readAsBytes();
+      
+      await _client.storage.from('fotos_reportes').uploadBinary(
+        nombreArchivo, 
+        bytes,
+      );
+      
+      urlDeLaFoto = _client.storage.from('fotos_reportes').getPublicUrl(nombreArchivo);
+    }
+
+    final idParsed = int.tryParse(grifoId) ?? grifoId;
+
+    // 2. Actualizamos el estado del grifo
+    await _client.from('grifo').update({
+      'estado': nuevoEstado,
+      'ultima_revision': DateTime.now().toIso8601String(),
+    }).eq('id', idParsed);
+
+    // 3. Creamos el reporte de falla
     await _client.from('reporte_falla').insert({
-      'grifo_id': grifoId,
+      'grifo_id': idParsed,
       'usuario_id': user.id,
-      'detalle': detalleTrabajo,
-      'tipo_falla': nuevoEstado == 'inhabilitado' ? 'falla_reportada' : 'mantenimiento',
+      'tipo_falla': nuevoEstado,
+      'detalle': detalle,
+      if (urlDeLaFoto != null) 'foto_url': urlDeLaFoto,
     });
+  }
+
+  // Función para cambiar el estado y guardar el reporte de lo que se le hizo
+  Future<void> actualizarEstadoGrifo(dynamic grifoId, String nuevoEstado, String detalleTrabajo) async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw Exception('Debes iniciar sesión para actualizar el estado');
+
+    // Normalizar ID (si es número o String/UUID)
+    final idParsed = int.tryParse(grifoId.toString()) ?? grifoId;
+    final estadoNormalizado = nuevoEstado.trim().toLowerCase();
+
+    // 1. Actualiza el estado en la tabla grifo
+    try {
+      await _client.from('grifo').update({
+        'estado': estadoNormalizado, 
+        'ultima_revision': DateTime.now().toIso8601String(),
+      }).eq('id', idParsed);
+    } catch (_) {
+      await _client.from('grifo').update({
+        'estado': estadoNormalizado,
+      }).eq('id', idParsed);
+    }
+
+    // 2. Guarda el reporte en la tabla reporte_falla (si está configurada)
+    try {
+      await _client.from('reporte_falla').insert({
+        'grifo_id': idParsed,
+        'usuario_id': user.id,
+        'detalle': detalleTrabajo,
+        'tipo_falla': estadoNormalizado == 'inhabilitado' ? 'falla_reportada' : 'mantenimiento',
+      });
+    } catch (e) {
+      print('Aviso: no se pudo registrar en reporte_falla: $e');
+    }
   }
 
   // Función para obtener solo los grifos operativos
@@ -370,6 +426,21 @@ class SupabaseService {
         .select()
         .eq('estado', 'inhabilitado');
     return respuesta;
+  }
+
+  Future<String> obtenerEstadoGrifo(String grifoId) async {
+    try {
+      final idParsed = int.tryParse(grifoId) ?? grifoId;
+      final data = await _client
+          .from('grifo')
+          .select('estado')
+          .eq('id', idParsed)
+          .single();
+      
+      return (data['estado'] as String?) ?? 'Desconocido';
+    } catch (e) {
+      return 'Desconocido';
+    }
   }
 
   // ==========================================================================
@@ -482,3 +553,18 @@ class SupabaseService {
     });
   }
 }
+
+// Funciones top-level para conveniencia si se invocan directamente desde otras pantallas
+Future<void> actualizarEstadoYReportar({
+  required String grifoId,
+  required String nuevoEstado,
+  required String detalle,
+  XFile? fotoXFile,
+}) => SupabaseService().actualizarEstadoYReportar(
+  grifoId: grifoId,
+  nuevoEstado: nuevoEstado,
+  detalle: detalle,
+  fotoXFile: fotoXFile,
+);
+
+Future<String> obtenerEstadoGrifo(String grifoId) => SupabaseService().obtenerEstadoGrifo(grifoId);
