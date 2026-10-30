@@ -22,9 +22,8 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   
-  // Prellenado con las credenciales de prueba solicitadas
-  final _emailController = TextEditingController(text: 'test@gmail.com');
-  final _passwordController = TextEditingController(text: 'test123456');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   bool _cargando = false;
   String? _error;
@@ -46,24 +45,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final email = _emailController.text.trim();
     final password = _passwordController.text;
-
-    // Caso especial para credenciales de prueba: test@gmail.com / test123456
-    if (email.toLowerCase() == 'test@gmail.com' && password == 'test123456') {
-      try {
-        final client = Supabase.instance.client;
-        // Intentamos autenticar con Supabase por si el usuario ya existe
-        await client.auth.signInWithPassword(
-          email: email,
-          password: password,
-        );
-      } catch (_) {
-        // Si no está registrado en Supabase o requiere confirmación, activamos la sesión de prueba de inmediato
-        AuthService.setTestSession(true);
-      } finally {
-        if (mounted) setState(() => _cargando = false);
-      }
-      return;
-    }
 
     try {
       final client = Supabase.instance.client;
