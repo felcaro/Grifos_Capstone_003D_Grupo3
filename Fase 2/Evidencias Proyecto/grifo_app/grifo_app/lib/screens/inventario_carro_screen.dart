@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
+import '../utils/permisos.dart';
+import '../utils/mantencion_util.dart';
+import 'mantencion_carro_panel.dart';
 
 const _estados = ['BUENO', 'REGULAR', 'MALO'];
 
@@ -124,11 +127,15 @@ class InventarioCarrosScreen extends StatefulWidget {
 class _InventarioCarrosScreenState extends State<InventarioCarrosScreen> {
   final _dbService = SupabaseService();
   late Future<List<Map<String, dynamic>>> _carrosFuture;
+  bool _puedeEditar = false; // solo se activa si el rol lo permite
 
   @override
   void initState() {
     super.initState();
     _cargar();
+    Permisos.cargar().then((p) {
+      if (mounted) setState(() => _puedeEditar = p.editarCarros);
+    });
   }
 
   void _cargar() {
@@ -189,15 +196,17 @@ class _InventarioCarrosScreenState extends State<InventarioCarrosScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.rojo,
         foregroundColor: Colors.white,
-        title: const Text('Inventario de Carros'),
+        title: const Text('Carros'),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.rojo,
-        foregroundColor: Colors.white,
-        onPressed: _agregarCarro,
-        icon: const Icon(Icons.add),
-        label: const Text('Nuevo Carro'),
-      ),
+      floatingActionButton: _puedeEditar
+          ? FloatingActionButton.extended(
+              backgroundColor: AppColors.rojo,
+              foregroundColor: Colors.white,
+              onPressed: _agregarCarro,
+              icon: const Icon(Icons.add),
+              label: const Text('Nuevo Carro'),
+            )
+          : null,
       body: RefreshIndicator(
         onRefresh: _refrescar,
         child: FutureBuilder<List<Map<String, dynamic>>>(
@@ -220,26 +229,64 @@ class _InventarioCarrosScreenState extends State<InventarioCarrosScreen> {
                 ],
               );
             }
-            return ListView.separated(
+            final conAlertas = carros.where((c) => alertasActivas(c).isNotEmpty).length;
+            return ListView(
               padding: const EdgeInsets.all(12),
-              itemCount: carros.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, i) {
-                final carro = carros[i];
-                return Container(
-                  decoration: _decoracionTarjeta(),
-                  child: ListTile(
-                    leading: const Icon(Icons.fire_truck, color: AppColors.rojo),
-                    title: Text(carro['nombre'] ?? '', style: const TextStyle(color: AppColors.textoPrincipal, fontWeight: FontWeight.bold)),
-                    subtitle: Text(carro['tipo'] ?? '', style: const TextStyle(color: AppColors.textoSecundario)),
-                    trailing: const Icon(Icons.chevron_right, color: AppColors.textoSecundario),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => CompartimentosScreen(carroId: carro['id'], nombreCarro: carro['nombre'] ?? '')),
+              children: [
+                if (conAlertas > 0)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '$conAlertas carro${conAlertas == 1 ? '' : 's'} con revisión técnica o mantención por atender',
+                            style: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                );
-              },
+                ...carros.map((carro) {
+                  final alertas = alertasActivas(carro);
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: _decoracionTarjeta(),
+                    child: ListTile(
+                      leading: Icon(Icons.fire_truck, color: tieneVencidas(alertas) ? AppColors.rojoAlerta : AppColors.rojo),
+                      title: Text(carro['nombre'] ?? '', style: const TextStyle(color: AppColors.textoPrincipal, fontWeight: FontWeight.bold)),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(carro['tipo'] ?? '', style: const TextStyle(color: AppColors.textoSecundario)),
+                          if (alertas.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Wrap(spacing: 6, runSpacing: 4, children: alertas.map(chipAlerta).toList()),
+                            ),
+                        ],
+                      ),
+                      trailing: const Icon(Icons.chevron_right, color: AppColors.textoSecundario),
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => CompartimentosScreen(carroId: carro['id'], nombreCarro: carro['nombre'] ?? '')),
+                        );
+                        if (mounted) _refrescar();
+                      },
+                    ),
+                  );
+                }),
+                const SizedBox(height: 80),
+              ],
             );
           },
         ),
@@ -259,14 +306,29 @@ class CompartimentosScreen extends StatefulWidget {
   State<CompartimentosScreen> createState() => _CompartimentosScreenState();
 }
 
-class _CompartimentosScreenState extends State<CompartimentosScreen> {
+class _CompartimentosScreenState extends State<CompartimentosScreen> with SingleTickerProviderStateMixin {
   final _dbService = SupabaseService();
   late Future<List<Map<String, dynamic>>> _compartimentosFuture;
+  late final TabController _tabs;
+  bool _puedeEditar = false; // solo se activa si el rol lo permite
 
   @override
   void initState() {
     super.initState();
+    Permisos.cargar().then((p) {
+      if (mounted) setState(() => _puedeEditar = p.editarCarros);
+    });
+    _tabs = TabController(length: 2, vsync: this);
+    _tabs.addListener(() {
+      if (mounted) setState(() {}); // para mostrar u ocultar el botón flotante
+    });
     _cargar();
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
   }
 
   void _cargar() {
@@ -476,15 +538,34 @@ class _CompartimentosScreenState extends State<CompartimentosScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.fondo,
-      appBar: AppBar(backgroundColor: AppColors.rojo, foregroundColor: Colors.white, title: Text(widget.nombreCarro)),
-      floatingActionButton: FloatingActionButton.extended(
+      appBar: AppBar(
         backgroundColor: AppColors.rojo,
         foregroundColor: Colors.white,
-        onPressed: _agregarCompartimento,
-        icon: const Icon(Icons.add),
-        label: const Text('Compartimento'),
+        title: Text(widget.nombreCarro),
+        bottom: TabBar(
+          controller: _tabs,
+          indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          tabs: const [
+            Tab(icon: Icon(Icons.inventory_2_outlined), text: 'Inventario'),
+            Tab(icon: Icon(Icons.build_outlined), text: 'Mantención y vencimientos'),
+          ],
+        ),
       ),
-      body: RefreshIndicator(
+      floatingActionButton: (_tabs.index == 0 && _puedeEditar)
+          ? FloatingActionButton.extended(
+              backgroundColor: AppColors.rojo,
+              foregroundColor: Colors.white,
+              onPressed: _agregarCompartimento,
+              icon: const Icon(Icons.add),
+              label: const Text('Compartimento'),
+            )
+          : null,
+      body: TabBarView(
+        controller: _tabs,
+        children: [
+          RefreshIndicator(
         onRefresh: _refrescar,
         child: FutureBuilder<List<Map<String, dynamic>>>(
           future: _compartimentosFuture,
@@ -536,17 +617,18 @@ class _CompartimentosScreenState extends State<CompartimentosScreen> {
                                 ),
                               ],
                             ),
-                            onTap: () => _editarItem(item),
+                            onTap: _puedeEditar ? () => _editarItem(item) : null,
                           );
                         }),
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8, bottom: 8),
-                          child: TextButton.icon(
-                            onPressed: () => _agregarItem(c['id']),
-                            icon: const Icon(Icons.add, color: AppColors.rojo, size: 18),
-                            label: const Text('Agregar ítem', style: TextStyle(color: AppColors.rojo)),
+                        if (_puedeEditar)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, bottom: 8),
+                            child: TextButton.icon(
+                              onPressed: () => _agregarItem(c['id']),
+                              icon: const Icon(Icons.add, color: AppColors.rojo, size: 18),
+                              label: const Text('Agregar ítem', style: TextStyle(color: AppColors.rojo)),
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -555,6 +637,9 @@ class _CompartimentosScreenState extends State<CompartimentosScreen> {
             );
           },
         ),
+      ),
+          MantencionCarroPanel(carroId: widget.carroId, nombreCarro: widget.nombreCarro, puedeEditar: _puedeEditar),
+        ],
       ),
     );
   }

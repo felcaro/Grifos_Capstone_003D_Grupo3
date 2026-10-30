@@ -21,6 +21,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   final _nombreController = TextEditingController();
   final _emailController = TextEditingController();
+  final _numeroController = TextEditingController();
+  final _maquinistaController = TextEditingController(); // opcional
   final _passwordController = TextEditingController();
   final _password2Controller = TextEditingController();
 
@@ -40,6 +42,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void dispose() {
     _nombreController.dispose();
     _emailController.dispose();
+    _numeroController.dispose();
+    _maquinistaController.dispose();
     _passwordController.dispose();
     _password2Controller.dispose();
     super.dispose();
@@ -54,7 +58,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (m.contains('invalid') && m.contains('email')) return 'El correo no es válido.';
     if (m.contains('rate limit') || m.contains('too many')) return 'Demasiados intentos. Espera un minuto y reintenta.';
     if (m.contains('database error')) {
-      return 'No se pudo crear tu perfil en la base de datos. Avisa al administrador (revisar el trigger de registro en Supabase).';
+      return 'No se pudo crear tu perfil. Puede que ese N° de voluntario o de maquinista ya esté registrado en tu compañía; si no, avisa al administrador.';
     }
     return mensaje;
   }
@@ -74,6 +78,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         password: _passwordController.text,
         nombre: nombre,
         companiaId: _companiaId!,
+        numeroVoluntario: _numeroController.text,
+        numeroMaquinista: _maquinistaController.text,
       );
 
       // Supabase no avisa con error cuando el correo ya existe (por seguridad):
@@ -156,6 +162,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       textCapitalization: TextCapitalization.words,
                       decoration: decoracionCampo('Nombre completo', prefixIcon: const Icon(Icons.badge_outlined)),
                       validator: (v) => (v == null || v.trim().length < 3) ? 'Ingresa tu nombre completo' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _numeroController,
+                      decoration: decoracionCampo('N° de voluntario (ej: 114)', prefixIcon: const Icon(Icons.confirmation_number_outlined)),
+                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Ingresa tu número de voluntario' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _maquinistaController,
+                      decoration: decoracionCampo('N° de maquinista (opcional, ej: 105 A)', prefixIcon: const Icon(Icons.local_shipping_outlined)),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(

@@ -481,4 +481,78 @@ class SupabaseService {
       'nuevo_rol': nuevoRol,
     });
   }
+
+  // ==========================================================================
+  // MANTENCIÓN Y VENCIMIENTOS DE LOS CARROS
+  // ==========================================================================
+
+  Future<Map<String, dynamic>?> obtenerCarro(String id) async {
+    return await _client.from('carro').select().eq('id', id).maybeSingle();
+  }
+
+  // Actualiza columnas sueltas del carro (fechas de vencimiento, km, intervalos).
+  // Un valor null borra el dato.
+  Future<void> actualizarCarro(String id, Map<String, dynamic> datos) async {
+    await _client.from('carro').update(datos).eq('id', id);
+  }
+
+  Future<List<Map<String, dynamic>>> obtenerHistorialMantencion(String carroId) async {
+    return await _client
+        .from('carro_mantencion')
+        .select()
+        .eq('carro_id', carroId)
+        .order('fecha', ascending: false);
+  }
+
+  // Guarda la mantención en el historial y actualiza "última mantención" y el
+  // kilometraje actual del carro (sin retroceder si es una mantención antigua).
+  Future<void> registrarMantencion({
+    required String carroId,
+    required String fecha, // yyyy-MM-dd
+    required int km,
+    required String tipo,
+    String? taller,
+    String? descripcion,
+  }) async {
+    await _client.from('carro_mantencion').insert({
+      'carro_id': carroId,
+      'fecha': fecha,
+      'km': km,
+      'tipo': tipo,
+      'taller': taller,
+      'descripcion': descripcion,
+      'creado_por': _client.auth.currentUser?.id,
+    });
+
+    final carro = await obtenerCarro(carroId);
+    final ultimaPrevia = DateTime.tryParse('${carro?['mantencion_ultima_fecha'] ?? ''}');
+    final kmActualPrevio = int.tryParse('${carro?['km_actual'] ?? ''}');
+    final nueva = DateTime.parse(fecha);
+
+    final datos = <String, dynamic>{};
+    if (ultimaPrevia == null || !nueva.isBefore(ultimaPrevia)) {
+      datos['mantencion_ultima_fecha'] = fecha;
+      datos['mantencion_ultimo_km'] = km;
+    }
+    if (kmActualPrevio == null || km > kmActualPrevio) {
+      datos['km_actual'] = km;
+    }
+    if (datos.isNotEmpty) {
+      await _client.from('carro').update(datos).eq('id', carroId);
+    }
+  }
+  /// Fila completa de "usuario" del usuario logueado (nombre, rut, etc.).
+  Future<Map<String, dynamic>?> obtenerPerfilActual() async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return null;
+    return await _client.from('usuario').select().eq('id', uid).maybeSingle();
+  }
+
+  /// Usuarios registrados de la compañía del usuario actual (para la asistencia).
+  Future<List<Map<String, dynamic>>> obtenerUsuariosCompania() async {
+    final companiaId = await obtenerCompaniaIdUsuarioActual();
+    if (companiaId == null) return [];
+    final filas = await _client.from('usuario').select().eq('compania_id', companiaId);
+    return List<Map<String, dynamic>>.from(filas);
+  }
 }

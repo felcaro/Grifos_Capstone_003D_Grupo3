@@ -5,11 +5,13 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/supabase_service.dart';
 import '../services/auth_service.dart';
 import '../screens/tesoreria_screen.dart'; // Si está en lib/ ajusta la ruta
-import '../screens/acta_form_screen.dart';
+import '../screens/actas_menu_screen.dart';
 import '../screens/inventario_carro_screen.dart';
 import '../screens/lista_grifos_screen.dart';
 import '../screens/personal_screen.dart';
 import '../screens/admin_usuarios_screen.dart';
+import '../utils/mantencion_util.dart';
+import '../utils/permisos.dart';
 // [MODULO_EPP_COMENTADO] Descomentar la siguiente línea cuando se implemente lib/services/entrega_epp_pdf_service.dart
 // import '../screens/entrega_epp_form_screen.dart';
 
@@ -557,7 +559,15 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
     } catch (_) {
       perfil = null;
     }
+    int alertasCarros = 0;
+    try {
+      final carros = await SupabaseService().obtenerCarros();
+      alertasCarros = carros.where((c) => alertasActivas(c).isNotEmpty).length;
+    } catch (_) {
+      alertasCarros = 0;
+    }
     if (!mounted) return;
+    final navegador = Navigator.of(context); // para poder volver a la raíz al cerrar sesión
     final String rolPerfil = (perfil?['rol'] ?? '').toString().toLowerCase();
     final bool esAdmin = rolPerfil == 'administrador';
     final String nombrePerfil = (perfil?['nombre'] ?? '').toString();
@@ -600,6 +610,7 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
               // ============================================================================
               // ELEMENTO DE MENÚ: Acceso al módulo de Tesorería
               // ============================================================================
+              if (Permisos.deRol(rolPerfil).verTesoreria)
               ListTile(
                 leading: const Icon(Icons.account_balance_wallet, color: Colors.red),
                 title: const Text('Tesorería'),
@@ -621,12 +632,12 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
               ListTile(
                 leading: const Icon(Icons.menu_book, color: Colors.red),
                 title: const Text('Actas'),
-                subtitle: const Text('Registrar acta de reunión de Directorio'),
+                subtitle: const Text('Parte de servicio y acta de Directorio'),
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const ActaFormScreen()),
+                    MaterialPageRoute(builder: (context) => const ActasMenuScreen()),
                   );
                 },
               ),
@@ -635,8 +646,13 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
               // ============================================================================
               ListTile(
                 leading: const Icon(Icons.fire_truck, color: Colors.red),
-                title: const Text('Inventario de Carros'),
-                subtitle: const Text('Material menor por compartimento'),
+                title: const Text('Carros'),
+                subtitle: Text(
+                  alertasCarros > 0
+                      ? '⚠ $alertasCarros carro${alertasCarros == 1 ? '' : 's'} con avisos de revisión o mantención'
+                      : 'Inventario, revisión técnica y mantención',
+                  style: TextStyle(color: alertasCarros > 0 ? Colors.red.shade700 : null),
+                ),
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
@@ -717,10 +733,10 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                 ),
                 onTap: () async {
                   Navigator.pop(context); // Cierra el modal
-                  await AuthService.signOut(); // o Supabase.instance.client.auth.signOut();
-                  if (context.mounted) {
-                    // Redirige al Login
-                    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+                  await AuthService.signOut();
+                  // Vuelve a la pantalla raíz: AuthGate muestra el login porque ya no hay sesión
+                  if (navegador.mounted) {
+                    navegador.popUntil((route) => route.isFirst);
                   }
                 },
               ),
@@ -879,6 +895,16 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
               padding: const EdgeInsets.all(16.0),
               child: Row(
                 children: [
+                  // Volver a la pantalla de inicio
+                  GestureDetector(
+                    onTap: () => Navigator.maybePop(context),
+                    child: CircleAvatar(
+                      radius: 25,
+                      backgroundColor: Colors.black.withOpacity(0.8),
+                      child: const Icon(Icons.home_rounded, color: Colors.white, size: 28),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   // El buscador ocupa todo el espacio que sobra
                   Expanded(
                     child: Container(

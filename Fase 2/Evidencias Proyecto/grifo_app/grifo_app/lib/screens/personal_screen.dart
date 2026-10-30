@@ -3,14 +3,10 @@ import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 import '../utils/vida_util.dart';
+import '../utils/permisos.dart';
 
 const _categorias = ['ESTRUCTURAL', 'RESCATE', 'FORESTAL', 'ACCESORIOS', 'OTRO'];
 const _estados = ['BUENO', 'REGULAR', 'MALO'];
-
-bool _esOficial(dynamic rol) {
-  final r = (rol ?? '').toString().toLowerCase().replaceAll('á', 'a');
-  return r == 'administrador' || r == 'capitan' || r == 'directorio';
-}
 
 Color _colorEstado(String estado) {
   switch (estado) {
@@ -80,13 +76,13 @@ class _PersonalScreenState extends State<PersonalScreen> {
             'No encontramos tu perfil. Inicia sesión con una cuenta registrada (no con el modo de prueba).',
           );
         }
-        if (_esOficial(perfil['rol'])) {
+        if (Permisos.deRol(perfil['rol']).verTodoElPersonal) {
           return _ListaPersonal(perfil: perfil);
         }
         return EquipoBomberoScreen(
           usuarioId: perfil['id'] as String,
-          nombre: (perfil['nombre'] ?? 'Mi equipo').toString(),
-          puedeEditar: false,
+          nombre: 'Mi equipo',
+          puedeEditar: Permisos.deRol(perfil['rol']).editarEquipoPropio, // solo SU equipo
         );
       },
     );

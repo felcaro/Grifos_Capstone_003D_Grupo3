@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config/env.dart';
-import 'screens/mapa_screens.dart'; // Importamos tu pantalla del mapa
+import 'screens/home_screen.dart'; // Pantalla de inicio (después del login)
 import 'widgets/auth_gate.dart'; // Compuerta de autenticación
 
 Future<void> main() async {
@@ -25,7 +25,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.red),
       ),
-      home: const AuthGate(home: MapaPrincipal()),
+      home: const AuthGate(home: HomeScreen()),
     );
   }
 }

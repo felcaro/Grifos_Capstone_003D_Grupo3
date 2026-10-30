@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utils/permisos.dart';
 
 /// Helper con utilidades comunes de autenticación para usar en cualquier parte de la app.
 class AuthService {
@@ -34,17 +35,27 @@ class AuthService {
     required String password,
     required String nombre,
     required String companiaId,
+    String? numeroVoluntario,
+    String? numeroMaquinista,
   }) {
     return _client.auth.signUp(
       email: email,
       password: password,
-      data: {'nombre': nombre, 'compania_id': companiaId},
+      data: {
+        'nombre': nombre,
+        'compania_id': companiaId,
+        if (numeroVoluntario != null && numeroVoluntario.trim().isNotEmpty)
+          'numero_voluntario': numeroVoluntario.trim(),
+        if (numeroMaquinista != null && numeroMaquinista.trim().isNotEmpty)
+          'numero_maquinista': numeroMaquinista.trim(),
+      },
     );
   }
 
   /// Cierra la sesión activa.
   static Future<void> signOut() async {
     testSessionNotifier.value = false;
+    Permisos.limpiar();
     await _client.auth.signOut();
   }
 }
