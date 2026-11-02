@@ -47,12 +47,6 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
-    // AQUI AGREGASTE EL CAMBIO DE NOMBRE DEL APK
-    applicationVariants.all { variant ->
-        variant.outputs.all { output ->
-            outputFileName = "GrifoTest.apk" 
-        }
-    }
 }
 
 kotlin {

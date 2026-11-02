@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -44,17 +45,82 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
 
   // Controlador de Google Maps para mover la cámara y centrar el grifo encontrado
   GoogleMapController? _mapController;
+  bool _miUbicacionHabilitada = false;
+  Position? _ultimaPosicion;
 
   @override
   void initState() {
     super.initState();
     _cargarGrifos();
+    _obtenerMiUbicacion();
   }
 
   @override
   void dispose() {
     _controladorBusqueda.dispose();
     super.dispose();
+  }
+
+  Future<void> _obtenerMiUbicacion() async {
+    bool servicioHabilitado;
+    LocationPermission permiso;
+
+    // 1. Revisa si el GPS del celular está encendido
+    servicioHabilitado = await Geolocator.isLocationServiceEnabled();
+    if (!servicioHabilitado) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Por favor, enciende el GPS.')),
+        );
+      }
+      return;
+    }
+
+    // 2. Revisa los permisos de la app
+    permiso = await Geolocator.checkPermission();
+    if (permiso == LocationPermission.denied) {
+      permiso = await Geolocator.requestPermission();
+      if (permiso == LocationPermission.denied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Permisos de ubicación denegados.')),
+          );
+        }
+        return;
+      }
+    }
+
+    if (permiso == LocationPermission.deniedForever) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Permisos de ubicación denegados permanentemente.')),
+        );
+      }
+      return;
+    }
+
+    // Activa el punto azul nativo en Google Maps
+    if (mounted) {
+      setState(() {
+        _miUbicacionHabilitada = true;
+      });
+    }
+
+    // 3. Obtiene las coordenadas actuales y centra la cámara del mapa
+    try {
+      Position posicion = await Geolocator.getCurrentPosition();
+      _ultimaPosicion = posicion;
+      if (_mapController != null) {
+        _mapController!.animateCamera(
+          CameraUpdate.newLatLngZoom(
+            LatLng(posicion.latitude, posicion.longitude),
+            16.5,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error al obtener ubicación: $e');
+    }
   }
 
   Future<void> _cargarGrifos() async {
@@ -96,7 +162,19 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
     }
   }
 
-  void _mostrarFormularioGrifo() {
+  Future<void> _mostrarFormularioGrifo() async {
+    final fueGuardado = await showDialog<bool>(
+      context: context,
+      builder: (context) => const DialogoRegistrarGrifo(),
+    );
+
+    if (fueGuardado == true) {
+      _cargarGrifos();
+    }
+  }
+
+  /*
+  void _mostrarFormularioGrifoAntiguo() {
     final latController = TextEditingController(text: '-33.6890');
     final lngController = TextEditingController(text: '-71.2150');
     final dirController = TextEditingController();
@@ -119,7 +197,7 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
             TextField(
               controller: dirController,
               decoration: const InputDecoration(
-                labelText: 'Dirección Referencial',
+                labelText: 'Dirección Referencial *',
               ),
             ),
           ],
@@ -159,6 +237,8 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
     );
   }
 
+  */
+
   // NUEVO: Formulario para editar un grifo existente
   void _mostrarFormularioEdicion([Map<String, dynamic>? grifo]) {
     // Buscamos los datos del grifo seleccionado para rellenar los campos de texto
@@ -196,7 +276,7 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
             TextField(
               controller: dirController,
               decoration: const InputDecoration(
-                labelText: 'Dirección Referencial',
+                labelText: 'Dirección Referencial *',
               ),
             ),
           ],
@@ -224,7 +304,8 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                   setState(
                     () => _grifoSeleccionadoId = null,
                   ); // Limpiamos la selección
-                  _cargarGrifos(); // Recargamos el mapa
+                  _cargarGrifos();
+                    // Recargamos el mapa
                 }
               } catch (e) {
                 if (context.mounted){
@@ -914,12 +995,23 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
         children: [
           GoogleMap(
             initialCameraPosition: _posicionInicial,
+            myLocationEnabled: _miUbicacionHabilitada,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
             markers: _marcadores,
             // Capturamos el controlador apenas el mapa termina de cargar
             onMapCreated: (GoogleMapController controller) {
               _mapController = controller;
+              if (_ultimaPosicion != null) {
+                _mapController!.animateCamera(
+                  CameraUpdate.newLatLngZoom(
+                    LatLng(_ultimaPosicion!.latitude, _ultimaPosicion!.longitude),
+                    16.5,
+                  ),
+                );
+              } else {
+                _obtenerMiUbicacion();
+              }
             },
           ),
           // 2. LA BARRA DE BÚSQUEDA Y EL PERFIL
@@ -995,6 +1087,17 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
             ),
           ),
         ],  
+      ),
+
+      // Botón flotante para centrar el mapa en la ubicación del usuario
+      floatingActionButton: FloatingActionButton(
+        onPressed: _obtenerMiUbicacion,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.blueAccent,
+        elevation: 4,
+        shape: const CircleBorder(),
+        tooltip: 'Centrar en mi ubicación',
+        child: const Icon(Icons.my_location, size: 28),
       ),
 
       // Barra inferior con diseño moderno, bordes redondeados superiores, sombra y texto descriptivo
@@ -1224,3 +1327,198 @@ void mostrarModalReporte(
   );
 }
 
+
+// ==============================================================================
+// MODAL PARA REGISTRAR NUEVO GRIFO CON GPS AUTOMÁTICO
+// ==============================================================================
+
+class DialogoRegistrarGrifo extends StatefulWidget {
+  const DialogoRegistrarGrifo({super.key});
+
+  @override
+  State<DialogoRegistrarGrifo> createState() => _DialogoRegistrarGrifoState();
+}
+
+class _DialogoRegistrarGrifoState extends State<DialogoRegistrarGrifo> {
+  final TextEditingController _latController = TextEditingController();
+  final TextEditingController _lngController = TextEditingController();
+  final TextEditingController _dirController = TextEditingController();
+  
+  bool _obteniendoUbicacion = true;
+  bool _guardando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _obtenerUbicacionActual();
+  }
+
+  @override
+  void dispose() {
+    _latController.dispose();
+    _lngController.dispose();
+    _dirController.dispose();
+    super.dispose();
+  }
+
+  // Función que busca el GPS apenas se abre el modal
+  Future<void> _obtenerUbicacionActual() async {
+    try {
+      bool servicioHabilitado = await Geolocator.isLocationServiceEnabled();
+      if (!servicioHabilitado) throw Exception('GPS apagado');
+
+      LocationPermission permiso = await Geolocator.checkPermission();
+      if (permiso == LocationPermission.denied) {
+        permiso = await Geolocator.requestPermission();
+        if (permiso == LocationPermission.denied) throw Exception('Permiso denegado');
+      }
+      if (permiso == LocationPermission.deniedForever) {
+        throw Exception('Permiso bloqueado permanentemente');
+      }
+
+      Position posicion = await Geolocator.getCurrentPosition();
+      
+      if (mounted) {
+        setState(() {
+          _latController.text = posicion.latitude.toString();
+          _lngController.text = posicion.longitude.toString();
+          _obteniendoUbicacion = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _obteniendoUbicacion = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error obteniendo ubicación: $e')),
+        );
+      }
+    }
+  }
+
+  // Función para guardar en la base de datos
+  Future<void> _guardarGrifo() async {
+    if (_latController.text.isEmpty || _lngController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Faltan las coordenadas')),
+      );
+      return;
+    }
+
+    if (_dirController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor, ingresa una dirección referencial')),
+      );
+      return;
+    }
+
+    setState(() => _guardando = true);
+
+    try {
+      try {
+        await SupabaseService().insertarGrifo(
+          double.parse(_latController.text),
+          double.parse(_lngController.text),
+          _dirController.text,
+        );
+      } catch (_) {
+        final userId = Supabase.instance.client.auth.currentUser?.id;
+        await Supabase.instance.client.from('grifo').insert({
+          'latitud': double.parse(_latController.text),
+          'longitud': double.parse(_lngController.text),
+          'direccion_referencial': _dirController.text,
+          'estado': 'operativo',
+          if (userId != null) 'creado_por': userId, 
+        });
+      }
+
+      if (mounted) {
+        Navigator.pop(context, true); // Cierra el modal y avisa que fue exitoso
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Grifo registrado correctamente 🚒')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Diseño basado en la imagen_7.png
+    return AlertDialog(
+      backgroundColor: const Color(0xFFF5E6E6), // Color crema/rosado de fondo
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('Registrar Nuevo Grifo', style: TextStyle(fontSize: 20)),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_obteniendoUbicacion)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 16.0),
+                child: Row(
+                  children: [
+                    SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                    SizedBox(width: 12),
+                    Text('Buscando señal GPS...'),
+                  ],
+                ),
+              ),
+            TextField(
+              controller: _latController,
+              decoration: const InputDecoration(
+                labelText: 'Latitud',
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _lngController,
+              decoration: const InputDecoration(
+                labelText: 'Longitud',
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _dirController,
+              decoration: const InputDecoration(
+                labelText: 'Dirección Referencial *',
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+              ),
+              textCapitalization: TextCapitalization.sentences,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _guardando ? null : () => Navigator.pop(context),
+          child: const Text('Cancelar', style: TextStyle(color: Colors.brown)),
+        ),
+        ElevatedButton(
+          onPressed: _guardando || _obteniendoUbicacion ? null : _guardarGrifo,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFFAF0E6), // Fondo claro del botón
+            foregroundColor: Colors.brown, // Letra café oscuro
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+          child: _guardando 
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Guardar'),
+        ),
+      ],
+    );
+  }
+}

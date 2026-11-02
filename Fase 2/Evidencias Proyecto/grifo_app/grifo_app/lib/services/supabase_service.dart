@@ -44,6 +44,7 @@ class SupabaseService {
       'latitud': lat,
       'longitud': lng,
       'direccion_referencial': direccion,
+      'estado': 'operativo',
       'creado_por': user.id,        // ID real del bombero
       'sector_id': sectorIdReal,    // ID real del sector (Melipilla o Alhué) calculado automáticamente
     });

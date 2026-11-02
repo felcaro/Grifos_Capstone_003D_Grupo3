@@ -39,6 +39,7 @@ dependencies:
   url_launcher: ^6.3.2
   pdf: ^3.11.1
   image_picker: ^1.2.4
+  geolocator: ^14.1.2
 
 dev_dependencies:
   flutter_test:
