@@ -437,6 +437,26 @@ Future<String?> subirComprobanteBoleta(Uint8List bytes, String extension) async 
       'creado_por': _client.auth.currentUser?.id,
     });
   }
+  /// Obtiene los movimientos de tesorería paginados según un rango específico.
+  Future<List<MovimientoTesoreria>> obtenerMovimientosTesoreriaPaginados({
+    required int offset,
+    required int limite,
+  }) async {
+    try {
+      final response = await _client
+          .from('movimiento_tesoreria')
+          .select()
+          .order('fecha', ascending: false)
+          .range(offset, offset + limite - 1);
+
+      return (response as List)
+          .map((json) => MovimientoTesoreria.fromJson(json))
+          .toList();
+    } catch (e) {
+      print('Error al obtener movimientos paginados: $e');
+      rethrow;
+    }
+  }
 
   // ==========================================================================
   // MÓDULO GESTIÓN DE ESTADO DE GRIFOS Y REPORTES

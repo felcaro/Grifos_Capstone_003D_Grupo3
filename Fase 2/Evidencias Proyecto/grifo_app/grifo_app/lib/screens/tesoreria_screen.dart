@@ -15,13 +15,100 @@ class TesoreriaScreen extends StatefulWidget {
 
 class _TesoreriaScreenState extends State<TesoreriaScreen> {
   final SupabaseService _supabaseService = SupabaseService();
+  final _db = SupabaseService();
+  final ScrollController _scrollController = ScrollController();
+  List<MovimientoTesoreria> _movimientos = [];
+  bool _cargando = true;
+  bool _cargandoMas = false;
+  bool _hayMasDatos = true;
+
+  static const int _limitePorPagina = 15;
+  int _offsetActual = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    _cargarPrimeraPagina();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    // Dispara la carga adicional cuando el usuario está cerca del final de la lista
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
+        !_cargandoMas &&
+        _hayMasDatos) {
+      _cargarMasMovimientos();
+    }
+  }
+  Future<void> _cargarPrimeraPagina() async {
+    setState(() {
+      _isLoading = true;
+      _offsetActual = 0;
+      _hayMasDatos = true;
+    });
+
+    try {
+      final nuevos = await _db.obtenerMovimientosTesoreriaPaginados(
+        offset: 0,
+        limite: _limitePorPagina,
+      );
+      final campanas = await _db.obtenerCampanasEconomicas();
+
+      if (!mounted) return;
+      setState(() {
+        _movimientos = nuevos;
+        _campanas = campanas;
+        _offsetActual = nuevos.length;
+        if (nuevos.length < _limitePorPagina) {
+          _hayMasDatos = false;
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al cargar movimientos: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _cargarMasMovimientos() async {
+    setState(() => _cargandoMas = true);
+
+    try {
+      final nuevos = await _db.obtenerMovimientosTesoreriaPaginados(
+        offset: _offsetActual,
+        limite: _limitePorPagina,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _movimientos.addAll(nuevos);
+        _offsetActual += nuevos.length;
+        if (nuevos.length < _limitePorPagina) {
+          _hayMasDatos = false;
+        }
+      });
+    } catch (e) {
+      print('Error al cargar más filas: $e');
+    } finally {
+      if (mounted) setState(() => _cargandoMas = false);
+    }
+  }
 
   String _busquedaQuery = '';
   String _filtroTipo = 'todos'; 
   String? _filtroCampanaId; // null = Incluye todas las campañas y movimientos generales
 
   bool _isLoading = true;
-  List<MovimientoTesoreria> _movimientos = [];
   List<CampanaEconomica> _campanas = [];
 
   double _totalIngresos = 0;
@@ -51,11 +138,6 @@ class _TesoreriaScreenState extends State<TesoreriaScreen> {
     return true;
   }).toList();
 }
-  @override
-  void initState() {
-    super.initState();
-    _cargarDatos();
-  }
 
   Future<void> _cargarDatos() async {
     setState(() => _isLoading = true);
@@ -713,6 +795,7 @@ class _TesoreriaScreenState extends State<TesoreriaScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final filtrados = _movimientosFiltrados;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gestión de Tesorería'),
@@ -721,7 +804,7 @@ class _TesoreriaScreenState extends State<TesoreriaScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _cargarDatos,
+            onPressed: _cargarPrimeraPagina,
             tooltip: 'Actualizar',
           )
         ],
@@ -743,7 +826,7 @@ class _TesoreriaScreenState extends State<TesoreriaScreen> {
                 _buildBarraBusquedaYFiltros(),
                 Expanded(
                   child: RefreshIndicator(
-                    onRefresh: _cargarDatos,
+                    onRefresh: _cargarPrimeraPagina,
                     child: _movimientosFiltrados.isEmpty
                         ? ListView(
                             physics: const AlwaysScrollableScrollPhysics(),
@@ -762,9 +845,17 @@ class _TesoreriaScreenState extends State<TesoreriaScreen> {
                         : ListView.builder(
                             physics: const AlwaysScrollableScrollPhysics(),
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            itemCount: _movimientosFiltrados.length,
+                            controller: _scrollController,
+                            itemCount: filtrados.length + (_cargandoMas ? 1 : 0),
                             itemBuilder: (context, index) {
+                              if (index == filtrados.length) {
+                                return const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 16.0),
+                                  child: Center(child: CircularProgressIndicator()),
+                                );
+                              }
                               final m = _movimientosFiltrados[index];
+
                               final esIngreso = m.tipo.toLowerCase() == 'ingreso';
 
                               String? nombreCampana;
