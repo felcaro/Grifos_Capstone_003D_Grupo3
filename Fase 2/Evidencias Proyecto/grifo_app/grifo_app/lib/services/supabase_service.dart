@@ -2,10 +2,118 @@ import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/movimiento_tesoreria.dart';
+import 'dart:io';
+import '../models/campana_economica.dart';
 
 class SupabaseService {
   final _client = Supabase.instance.client;
+// ============================================================================
+// EDICIÓN Y ELIMINACIÓN DE MOVIMIENTOS EN TESORERÍA
+// ============================================================================
 
+/// Actualiza un movimiento de tesorería existente por su ID.
+Future<void> actualizarMovimientoTesoreria({
+  required String id,
+  required String tipo,
+  required double monto,
+  required String descripcion,
+  String? campanaId,
+  String? boletaUrl,
+}) async {
+  try {
+    await _client.from('movimiento_tesoreria').update({
+      'tipo': tipo,
+      'monto': monto,
+      'descripcion': descripcion,
+      'campana_id': (campanaId != null && campanaId.trim().isNotEmpty)
+          ? campanaId.trim()
+          : null,
+      'boleta_url': boletaUrl,
+    }).eq('id', id);
+  } catch (e) {
+    print('Error al actualizar movimiento de tesorería: $e');
+    rethrow;
+  }
+}
+
+/// Elimina un movimiento de tesorería y remueve su comprobante adjunto del Storage
+Future<void> eliminarMovimientoTesoreria({
+  required String id,
+  String? boletaUrl,
+}) async {
+  try {
+    // 1. Si existe comprobante adjunto, lo eliminamos de Supabase Storage para evitar archivos huérfanos
+    if (boletaUrl != null && boletaUrl.isNotEmpty) {
+      try {
+        final uri = Uri.parse(boletaUrl);
+        // Extraemos la ruta del archivo a partir de '/tesoreria/'
+        final pathSegments = uri.pathSegments;
+        final indexBucket = pathSegments.indexOf('tesoreria');
+        if (indexBucket != -1 && indexBucket < pathSegments.length - 1) {
+          final filePath = pathSegments.sublist(indexBucket + 1).join('/');
+          await _client.storage.from('tesoreria').remove([filePath]);
+        }
+      } catch (eStorage) {
+        print('Advertencia al eliminar archivo de storage: $eStorage');
+      }
+    }
+
+    // 2. Eliminar la fila en la base de datos PostgreSQL
+    await _client.from('movimiento_tesoreria').delete().eq('id', id);
+  } catch (e) {
+    print('Error al eliminar movimiento de tesorería: $e');
+    rethrow;
+  }
+}
+/// Obtiene la lista de campañas económicas de la compañía del usuario.
+Future<List<CampanaEconomica>> obtenerCampanasEconomicas() async {
+  try {
+    final user = _client.auth.currentUser;
+    if (user == null) return [];
+
+    // 1. Consultar a qué compañía pertenece el usuario logueado
+    final usuarioResponse = await _client
+        .from('usuario')
+        .select('compania_id')
+        .eq('id', user.id)
+        .single();
+
+    final companiaId = usuarioResponse['compania_id'];
+
+    // 2. Traer las campañas de esa compañía ordenadas por nombre
+    final response = await _client
+        .from('campana_economica')
+        .select()
+        .eq('compania_id', companiaId)
+        .order('nombre', ascending: true);
+
+    return (response as List)
+        .map((json) => CampanaEconomica.fromJson(json))
+        .toList();
+  } catch (e) {
+    print('Error al obtener campañas económicas: $e');
+    return [];
+  }
+}
+/// Subir comprobante o boleta a Supabase Storage (compatible con Web y Móvil)
+Future<String?> subirComprobanteBoleta(Uint8List bytes, String extension) async {
+  try {
+    final nombreArchivo = 'boleta_${DateTime.now().millisecondsSinceEpoch}.$extension';
+    final rutaStorage = 'comprobantes/$nombreArchivo';
+
+    // Subir bytes directamente al bucket 'tesoreria'
+    await _client.storage.from('tesoreria').uploadBinary(
+          rutaStorage,
+          bytes,
+        );
+
+    final urlPublica = _client.storage.from('tesoreria').getPublicUrl(rutaStorage);
+    return urlPublica;
+  } catch (e) {
+    print('Error al subir comprobante a Supabase Storage: $e');
+    return null;
+  }
+}
   // ==========================================================================
   // MÓDULO GRIFOS
   // ==========================================================================

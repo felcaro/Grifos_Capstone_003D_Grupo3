@@ -5,6 +5,7 @@ import '../models/parte_servicio.dart';
 import '../services/parte_servicio_pdf_service.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
+import 'dart:core';
 
 /// Formulario digital del "Parte de Servicio" (libro físico de la compañía).
 /// Obligatorio: todo salvo N° OBAC, 6-0 y la sección de testigos.
@@ -47,7 +48,7 @@ InputDecoration _decoracion(String label) => InputDecoration(
 BoxDecoration _decoracionTarjeta() => BoxDecoration(
       color: AppColors.tarjeta,
       borderRadius: BorderRadius.circular(14),
-      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6, offset: const Offset(0, 2))],
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6, offset: const Offset(0, 2))],
     );
 
 String? _requerido(String? v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null;
@@ -503,7 +504,7 @@ class _ParteServicioFormScreenState extends State<ParteServicioFormScreen> {
             return Container(
               margin: const EdgeInsets.only(bottom: 6),
               decoration: BoxDecoration(
-                color: presente ? AppColors.verde.withOpacity(0.08) : Colors.white,
+                color: presente ? AppColors.verde.withValues(alpha: 0.08) : Colors.white,
                 border: Border.all(color: presente ? AppColors.verde : AppColors.bordeCampo),
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -528,7 +529,7 @@ class _ParteServicioFormScreenState extends State<ParteServicioFormScreen> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                       child: DropdownButtonFormField<String>(
-                        value: _carroPorUsuario[id],
+                        initialValue: _carroPorUsuario[id],
                         decoration: _decoracion('Carro *'),
                         items: _carros
                             .map((c) => DropdownMenuItem<String>(value: c['nombre'].toString(), child: Text(c['nombre'].toString())))
