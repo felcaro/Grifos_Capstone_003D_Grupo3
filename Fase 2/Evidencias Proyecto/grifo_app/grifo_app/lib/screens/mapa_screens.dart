@@ -15,11 +15,11 @@ import '../screens/personal_screen.dart';
 import '../screens/admin_usuarios_screen.dart';
 import '../utils/mantencion_util.dart';
 import '../utils/permisos.dart';
+
 // [MODULO_EPP_COMENTADO] Descomentar la siguiente línea cuando se implemente lib/services/entrega_epp_pdf_service.dart
 // import '../screens/entrega_epp_form_screen.dart';
 
 class MapaPrincipal extends StatefulWidget {
-  
   const MapaPrincipal({super.key});
 
   @override
@@ -47,10 +47,12 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
   GoogleMapController? _mapController;
   bool _miUbicacionHabilitada = false;
   Position? _ultimaPosicion;
+  BitmapDescriptor _iconoGrifo = BitmapDescriptor.defaultMarker;
 
   @override
   void initState() {
     super.initState();
+    _cargarIconoGrifo();
     _cargarGrifos();
     _obtenerMiUbicacion();
   }
@@ -59,6 +61,23 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
   void dispose() {
     _controladorBusqueda.dispose();
     super.dispose();
+  }
+
+  Future<void> _cargarIconoGrifo() async {
+    try {
+      final icono = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(48, 48)),
+        'lib/assets/grifo.png',
+      );
+      if (mounted) {
+        setState(() {
+          _iconoGrifo = icono;
+        });
+        _cargarGrifos();
+      }
+    } catch (e) {
+      debugPrint('Error al cargar icono del grifo: $e');
+    }
   }
 
   Future<void> _obtenerMiUbicacion() async {
@@ -93,7 +112,9 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
     if (permiso == LocationPermission.deniedForever) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Permisos de ubicación denegados permanentemente.')),
+          const SnackBar(
+            content: Text('Permisos de ubicación denegados permanentemente.'),
+          ),
         );
       }
       return;
@@ -138,9 +159,7 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                 double.parse(grifo['longitud'].toString()),
               ),
               infoWindow: InfoWindow.noText,
-              icon: BitmapDescriptor.defaultMarkerWithHue(
-                BitmapDescriptor.hueRed,
-              ),
+              icon: _iconoGrifo,
               // Al tocar el pin, guardamos su ID y abrimos el panel de detalle
               onTap: () {
                 setState(() {
@@ -242,11 +261,12 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
   // NUEVO: Formulario para editar un grifo existente
   void _mostrarFormularioEdicion([Map<String, dynamic>? grifo]) {
     // Buscamos los datos del grifo seleccionado para rellenar los campos de texto
-    final grifoActual = grifo ?? _listaGrifos.firstWhere(
-      (g) => g['id'].toString() == _grifoSeleccionadoId,
-    );
+    final grifoActual =
+        grifo ??
+        _listaGrifos.firstWhere(
+          (g) => g['id'].toString() == _grifoSeleccionadoId,
+        );
     final idGrifo = grifoActual['id'].toString();
-
 
     final latController = TextEditingController(
       text: grifoActual['latitud'].toString(),
@@ -305,10 +325,10 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                     () => _grifoSeleccionadoId = null,
                   ); // Limpiamos la selección
                   _cargarGrifos();
-                    // Recargamos el mapa
+                  // Recargamos el mapa
                 }
               } catch (e) {
-                if (context.mounted){
+                if (context.mounted) {
                   ScaffoldMessenger.of(context)
                       .showSnackBar(SnackBar(content: Text('Error: $e')));
                 }
@@ -341,7 +361,8 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
           child: SafeArea(
             top: false,
             child: Column(
-              mainAxisSize: MainAxisSize.min, // Para que ocupe solo lo necesario
+              mainAxisSize:
+                  MainAxisSize.min, // Para que ocupe solo lo necesario
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 1. Encabezado con título y botón de cerrar
@@ -350,89 +371,95 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                   children: [
                     const Text(
                       'Detalle del Grifo',
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, color: Colors.grey),
-                      onPressed: () => Navigator.pop(context), // Cierra la ventana
+                      onPressed: () =>
+                          Navigator.pop(context), // Cierra la ventana
                     ),
                   ],
                 ),
                 const Divider(),
                 const SizedBox(height: 10),
 
-                // 2. Dirección con ícono
+                // 2. Nodo OSM con ícono de ubicación
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Icon(Icons.location_on, color: Colors.blueGrey, size: 22),
-                    const SizedBox(width: 10),
+                    const Icon(
+                      Icons.location_on,
+                      color: Color(0xFF607D8B),
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        // Asegúrate de usar la variable correcta de tu base de datos
-                        grifoData['direccion_referencial'] ?? 'Dirección no especificada',
-                        style: const TextStyle(fontSize: 16, color: Colors.black87),
+                        'Nodo OSM: ${grifoData['nodo_osm'] ?? grifoData['direccion_referencial'] ?? ''}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Color(0xFF333333),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // 3. Nodo OSM con ícono
-                Row(
-                  children: [
-                    const Icon(Icons.map, color: Colors.blueGrey, size: 22),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Nodo OSM: ${grifoData['nodo_osm'] ?? 'Sin nodo'}',
-                      style: const TextStyle(fontSize: 15, color: Colors.black54),
                     ),
                   ],
                 ),
                 const SizedBox(height: 20),
 
                 // Puedes poner esto dentro del Column() de tu diseño de detalles
-                const Text('Estado Actual:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text(
+                  'Estado Actual:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 4),
                 FutureBuilder<String>(
-                  future: obtenerEstadoGrifo(grifoData['id'].toString()), // Asegúrate de pasarle el ID del grifo
+                  future: obtenerEstadoGrifo(
+                    grifoData['id'].toString(),
+                  ), // Asegúrate de pasarle el ID del grifo
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       // Mientras carga desde Supabase, muestra un circulito pequeño
                       return const SizedBox(
-                        width: 16, 
-                        height: 16, 
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       );
                     }
-                    
+
                     final estadoActual = snapshot.data ?? 'Desconocido';
-                    
+
                     // Aquí puedes cambiar el color del texto dependiendo del estado si quieres
                     Color colorEstado = Colors.black;
                     if (estadoActual == 'operativo') colorEstado = Colors.green;
-                    if (estadoActual == 'con_falla' || estadoActual == 'inhabilitado') colorEstado = Colors.red;
-                    if (estadoActual == 'obstruido') colorEstado = Colors.orange;
+                    if (estadoActual == 'con_falla' ||
+                        estadoActual == 'inhabilitado')
+                      colorEstado = Colors.red;
+                    if (estadoActual == 'obstruido')
+                      colorEstado = Colors.orange;
 
                     return Text(
-                      estadoActual.toUpperCase(), 
+                      estadoActual.toUpperCase(),
                       style: TextStyle(
-                        fontWeight: FontWeight.bold, 
+                        fontWeight: FontWeight.bold,
                         color: colorEstado,
                         fontSize: 16,
                       ),
                     );
                   },
                 ),
-                const SizedBox(height: 16), // Espacio antes del siguiente elemento
-
-                // 5. Botones de acción (Ir ruta, Modificar, Reporte)
+                const SizedBox(
+                  height: 16,
+                ), // Espacio antes del siguiente elemento
+                // 5. Botones de acción (Ir ruta, Modificar, Reporte) con estilo de colores
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // 1. Botón Ir ruta
+                    // 1. Botón Ir ruta (Azul)
                     Expanded(
-                      child: OutlinedButton(
+                      child: ElevatedButton(
                         onPressed: () async {
                           Navigator.pop(context);
                           final lat = grifoData['latitud'];
@@ -442,61 +469,99 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                               'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng',
                             );
                             if (await canLaunchUrl(url)) {
-                              await launchUrl(url, mode: LaunchMode.externalApplication);
+                              await launchUrl(
+                                url,
+                                mode: LaunchMode.externalApplication,
+                              );
                             }
                           } else {
                             _abrirRutaEnMaps();
                           }
                         },
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          side: const BorderSide(color: Colors.black, width: 2), // Borde negro grueso como en el diseño
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1976D2),
+                          foregroundColor: Colors.white,
+                          elevation: 1,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
                         ),
-                        child: const Text('Ir ruta', style: TextStyle(color: Colors.black, fontSize: 13)),
+                        child: const Text(
+                          'Ir ruta',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8), // Espaciador central
-                    
-                    // 2. Botón Modificar (Para el grifo)
+                    // 2. Botón Modificar (Naranja)
                     Expanded(
-                      child: OutlinedButton(
+                      child: ElevatedButton(
                         onPressed: () {
                           Navigator.pop(context); // Cierra el bottom sheet
-                          _mostrarFormularioEdicion(grifoData); // Lógica para editar la información base del grifo
+                          _mostrarFormularioEdicion(
+                            grifoData,
+                          ); // Lógica para editar la información base del grifo
                         },
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          side: const BorderSide(color: Colors.black, width: 2),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF57C00),
+                          foregroundColor: Colors.white,
+                          elevation: 1,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
                         ),
-                        child: const Text('Modificar', style: TextStyle(color: Colors.black, fontSize: 13)),
+                        child: const Text(
+                          'Modificar',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8), // Espaciador central
-                    
-                    // 3. Botón Reporte (Crear falla con foto)
+                    // 3. Botón Reporte (Rojo)
                     Expanded(
-                      child: OutlinedButton(
+                      child: ElevatedButton(
                         onPressed: () {
                           Navigator.pop(context); // Cierra el bottom sheet
                           // Conectamos la función para subir la foto y el detalle del reporte
                           mostrarModalReporte(
                             context,
-                            (grifoData['nodo_osm'] ?? grifoData['direccion_referencial'] ?? grifoData['id']).toString(),
+                            (grifoData['nodo_osm'] ??
+                                    grifoData['direccion_referencial'] ??
+                                    grifoData['id'])
+                                .toString(),
                             grifoData['id'].toString(),
                             onActualizado: _cargarGrifos,
                           );
                         },
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          side: const BorderSide(color: Colors.black, width: 2),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFD32F2F),
+                          foregroundColor: Colors.white,
+                          elevation: 1,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
                         ),
-                        child: const Text('Reporte', style: TextStyle(color: Colors.black, fontSize: 13)),
+                        child: const Text(
+                          'Reporte',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ),
-
                   ],
                 ),
                 const SizedBox(height: 10), // Margen inferior
@@ -512,7 +577,10 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
   void _mostrarDialogReporteEstado(Map<String, dynamic> grifoData) {
     mostrarModalReporte(
       context,
-      (grifoData['nodo_osm'] ?? grifoData['direccion_referencial'] ?? grifoData['id']).toString(),
+      (grifoData['nodo_osm'] ??
+              grifoData['direccion_referencial'] ??
+              grifoData['id'])
+          .toString(),
       grifoData['id'].toString(),
       onActualizado: _cargarGrifos,
     );
@@ -521,8 +589,12 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
   // Diálogo para ver el detalle o historial del reporte
   void _mostrarDetalleReporte(Map<String, dynamic> grifo) {
     final estadoActual = grifo['estado'] ?? 'operativo';
-    final ultimaRevision = grifo['ultima_revision'] != null 
-        ? DateTime.tryParse(grifo['ultima_revision'].toString())?.toLocal().toString().split('.')[0] ?? 'Sin revisión'
+    final ultimaRevision = grifo['ultima_revision'] != null
+        ? DateTime.tryParse(grifo['ultima_revision'].toString())
+                  ?.toLocal()
+                  .toString()
+                  .split('.')[0] ??
+              'Sin revisión'
         : 'Sin revisión registrada';
 
     showDialog(
@@ -531,7 +603,7 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
         return AlertDialog(
           backgroundColor: const Color(0xFFF5E6E6),
           title: Text(
-            'Nodo OSM: ${grifo['nodo_osm'] ?? grifo['id'] ?? ''}', 
+            'Nodo OSM: ${grifo['nodo_osm'] ?? grifo['id'] ?? ''}',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           content: SizedBox(
@@ -546,11 +618,17 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                   .maybeSingle(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
+                  return const SizedBox(
+                    height: 100,
+                    child: Center(child: CircularProgressIndicator()),
+                  );
                 }
 
                 if (snapshot.hasError) {
-                  return Text('Error al cargar reporte: ${snapshot.error}', style: const TextStyle(color: Colors.red));
+                  return Text(
+                    'Error al cargar reporte: ${snapshot.error}',
+                    style: const TextStyle(color: Colors.red),
+                  );
                 }
 
                 final reporte = snapshot.data;
@@ -560,45 +638,74 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Estado actual: ${estadoActual.toString().toUpperCase()}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text(
+                        'Estado actual: ${estadoActual.toString().toUpperCase()}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       const Divider(),
 
                       if (estadoActual == 'operativo') ...[
-                        Text('Última revisión: $ultimaRevision', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(
+                          'Última revisión: $ultimaRevision',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
                         const SizedBox(height: 8),
                         if (reporte != null) ...[
-                          const Text('Falla anterior solucionada:', style: TextStyle(color: Colors.grey)),
+                          const Text(
+                            'Falla anterior solucionada:',
+                            style: TextStyle(color: Colors.grey),
+                          ),
                           Text('Tipo: ${reporte['tipo_falla']}'),
-                        ] else 
+                        ] else
                           const Text('No tiene fallas históricas registradas.'),
                       ] else ...[
                         if (reporte != null) ...[
-                          const Text('Detalle de la falla actual:', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const Text(
+                            'Detalle de la falla actual:',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                           const SizedBox(height: 4),
                           Text('Tipo: ${reporte['tipo_falla']}'),
-                          Text('Observación: ${reporte['detalle'] ?? 'Sin detalle'}'),
+                          Text(
+                            'Observación: ${reporte['detalle'] ?? 'Sin detalle'}',
+                          ),
                           const SizedBox(height: 12),
-                          
+
                           if (reporte['foto_url'] != null) ...[
-                            const Text('Fotografía del problema:', style: TextStyle(fontWeight: FontWeight.bold)),
+                            const Text(
+                              'Fotografía del problema:',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                             const SizedBox(height: 8),
                             ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: Image.network(
-                                reporte['foto_url'].toString().startsWith('http')
+                                reporte['foto_url'].toString().startsWith(
+                                      'http',
+                                    )
                                     ? reporte['foto_url'].toString()
-                                    : Supabase.instance.client.storage.from('fotos_reportes').getPublicUrl(reporte['foto_url']),
+                                    : Supabase.instance.client.storage
+                                          .from('fotos_reportes')
+                                          .getPublicUrl(reporte['foto_url']),
                                 height: 200,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
                               ),
                             ),
                           ] else
-                            const Text('No se adjuntó fotografía en este reporte.', style: TextStyle(color: Colors.red)),
+                            const Text(
+                              'No se adjuntó fotografía en este reporte.',
+                              style: TextStyle(color: Colors.red),
+                            ),
                         ] else
-                          const Text('El grifo está marcado con falla pero no tiene reporte asociado.'),
-                      ]
+                          const Text(
+                            'El grifo está marcado con falla pero no tiene reporte asociado.',
+                          ),
+                      ],
                     ],
                   ),
                 );
@@ -608,14 +715,16 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cerrar', style: TextStyle(color: Colors.black)),
-            )
+              child: const Text(
+                'Cerrar',
+                style: TextStyle(color: Colors.black),
+              ),
+            ),
           ],
         );
       },
     );
   }
-
 
   // Función para abrir Google Maps / Waze con la ruta hacia el grifo
   Future<void> _abrirRutaEnMaps() async {
@@ -681,150 +790,190 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
       alertasCarros = 0;
     }
     if (!mounted) return;
-    final navegador = Navigator.of(context); // para poder volver a la raíz al cerrar sesión
+    final navegador = Navigator.of(
+      context,
+    ); // para poder volver a la raíz al cerrar sesión
     final String rolPerfil = (perfil?['rol'] ?? '').toString().toLowerCase();
     final bool esAdmin = rolPerfil == 'administrador';
     final String nombrePerfil = (perfil?['nombre'] ?? '').toString();
 
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // permite que el panel crezca y se pueda desplazar
+      isScrollControlled:
+          true, // permite que el panel crezca y se pueda desplazar
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
         return SafeArea(
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+            ),
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20.0),
               child: Column(
-            mainAxisSize: MainAxisSize.min, // Se adapta al contenido
-            children: [
-              const CircleAvatar(
-                radius: 40,
-                backgroundColor: Colors.red,
-                child: Icon(Icons.local_fire_department, size: 40, color: Colors.white),
-              ),
-              const SizedBox(height: 15),
-              // Mostramos el usuario/correo con el que se conectó
-              Text(
-                emailUsuario,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                perfil == null
-                    ? 'Bombero - Melipilla'
-                    : '${nombrePerfil.isNotEmpty ? nombrePerfil : 'Usuario'} · ${etiquetaRol(rolPerfil)}',
-                style: const TextStyle(color: Colors.grey, fontSize: 16),
-              ),
-              const SizedBox(height: 20),
-              const Divider(),
-              // ============================================================================
-              // ELEMENTO DE MENÚ: Acceso al módulo de Tesorería
-              // ============================================================================
-              if (Permisos.deRol(rolPerfil).verTesoreria)
-              ListTile(
-                leading: const Icon(Icons.account_balance_wallet, color: Colors.red),
-                title: const Text('Tesorería'),
-                subtitle: const Text('Rendición de cuentas e ingresos/gastos'),
-                onTap: () {
-                  // 1. Cierra el menú lateral (Drawer)
-                  Navigator.pop(context); 
+                mainAxisSize: MainAxisSize.min, // Se adapta al contenido
+                children: [
+                  const CircleAvatar(
+                    radius: 40,
+                    backgroundColor: Colors.red,
+                    child: Icon(
+                      Icons.local_fire_department,
+                      size: 40,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  // Mostramos el usuario/correo con el que se conectó
+                  Text(
+                    emailUsuario,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    perfil == null
+                        ? 'Bombero - Melipilla'
+                        : '${nombrePerfil.isNotEmpty ? nombrePerfil : 'Usuario'} · ${etiquetaRol(rolPerfil)}',
+                    style: const TextStyle(color: Colors.grey, fontSize: 16),
+                  ),
+                  const SizedBox(height: 20),
+                  const Divider(),
+                  // ============================================================================
+                  // ELEMENTO DE MENÚ: Acceso al módulo de Tesorería
+                  // ============================================================================
+                  if (Permisos.deRol(rolPerfil).verTesoreria)
+                    ListTile(
+                      leading: const Icon(
+                        Icons.account_balance_wallet,
+                        color: Colors.red,
+                      ),
+                      title: const Text('Tesorería'),
+                      subtitle: const Text(
+                        'Rendición de cuentas e ingresos/gastos',
+                      ),
+                      onTap: () {
+                        // 1. Cierra el menú lateral (Drawer)
+                        Navigator.pop(context);
 
-                  // 2. Navega hacia la pantalla de Tesorería
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => TesoreriaScreen()),
-                  );
-                },
-              ),
-              // ============================================================================
-              // ELEMENTO DE MENÚ: Acceso al módulo de Actas
-              // ============================================================================
-              ListTile(
-                leading: const Icon(Icons.menu_book, color: Colors.red),
-                title: const Text('Actas'),
-                subtitle: const Text('Parte de servicio y acta de Directorio'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const ActasMenuScreen()),
-                  );
-                },
-              ),
-              // ============================================================================
-              // ELEMENTO DE MENÚ: Acceso al módulo de Inventario de Carros
-              // ============================================================================
-              ListTile(
-                leading: const Icon(Icons.fire_truck, color: Colors.red),
-                title: const Text('Carros'),
-                subtitle: Text(
-                  alertasCarros > 0
-                      ? '⚠ $alertasCarros carro${alertasCarros == 1 ? '' : 's'} con avisos de revisión o mantención'
-                      : 'Inventario, revisión técnica y mantención',
-                  style: TextStyle(color: alertasCarros > 0 ? Colors.red.shade700 : null),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const InventarioCarrosScreen()),
-                  );
-                },
-              ),
-              // ============================================================================
-              // ELEMENTO DE MENÚ: Equipo del Personal (trajes y cosas personales)
-              // ============================================================================
-              ListTile(
-                leading: const Icon(Icons.badge, color: Colors.red),
-                title: const Text('Equipo del Personal'),
-                subtitle: const Text('Trajes y equipo personal de cada bombero'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const PersonalScreen()),
-                  );
-                },
-              ),
-              // ============================================================================
-              // ELEMENTO DE MENÚ: Administración de usuarios (solo administradores)
-              // ============================================================================
-              if (esAdmin)
-                ListTile(
-                  leading: const Icon(Icons.admin_panel_settings, color: Colors.red),
-                  title: const Text('Administración'),
-                  subtitle: const Text('Usuarios y roles de la compañía'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const AdminUsuariosScreen()),
-                    );
-                  },
-                ),
-              // ============================================================================
-              // ELEMENTO DE MENÚ: Acceso a Lista y Estado de Grifos
-              // ============================================================================
-              ListTile(
-                leading: const Icon(Icons.water_drop, color: Colors.red),
-                title: const Text('Estado de Grifos'),
-                subtitle: const Text('Ver grifos operativos e inhabilitados'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const ListaGrifosScreen()),
-                  );
-                },
-              ),
-              // ============================================================================
-              // [MODULO_EPP_COMENTADO] Descomentar este bloque para reactivar la pantalla de EPP:
-              // ============================================================================
-              /*
+                        // 2. Navega hacia la pantalla de Tesorería
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => TesoreriaScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  // ============================================================================
+                  // ELEMENTO DE MENÚ: Acceso al módulo de Actas
+                  // ============================================================================
+                  ListTile(
+                    leading: const Icon(Icons.menu_book, color: Colors.red),
+                    title: const Text('Actas'),
+                    subtitle: const Text(
+                      'Parte de servicio y acta de Directorio',
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ActasMenuScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  // ============================================================================
+                  // ELEMENTO DE MENÚ: Acceso al módulo de Inventario de Carros
+                  // ============================================================================
+                  ListTile(
+                    leading: const Icon(Icons.fire_truck, color: Colors.red),
+                    title: const Text('Carros'),
+                    subtitle: Text(
+                      alertasCarros > 0
+                          ? '⚠ $alertasCarros carro${alertasCarros == 1 ? '' : 's'} con avisos de revisión o mantención'
+                          : 'Inventario, revisión técnica y mantención',
+                      style: TextStyle(
+                        color: alertasCarros > 0 ? Colors.red.shade700 : null,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const InventarioCarrosScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  // ============================================================================
+                  // ELEMENTO DE MENÚ: Equipo del Personal (trajes y cosas personales)
+                  // ============================================================================
+                  ListTile(
+                    leading: const Icon(Icons.badge, color: Colors.red),
+                    title: const Text('Equipo del Personal'),
+                    subtitle: const Text(
+                      'Trajes y equipo personal de cada bombero',
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const PersonalScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  // ============================================================================
+                  // ELEMENTO DE MENÚ: Administración de usuarios (solo administradores)
+                  // ============================================================================
+                  if (esAdmin)
+                    ListTile(
+                      leading: const Icon(
+                        Icons.admin_panel_settings,
+                        color: Colors.red,
+                      ),
+                      title: const Text('Administración'),
+                      subtitle: const Text('Usuarios y roles de la compañía'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const AdminUsuariosScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  // ============================================================================
+                  // ELEMENTO DE MENÚ: Acceso a Lista y Estado de Grifos
+                  // ============================================================================
+                  ListTile(
+                    leading: const Icon(Icons.water_drop, color: Colors.red),
+                    title: const Text('Estado de Grifos'),
+                    subtitle: const Text(
+                      'Ver grifos operativos e inhabilitados',
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ListaGrifosScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  // ============================================================================
+                  // [MODULO_EPP_COMENTADO] Descomentar este bloque para reactivar la pantalla de EPP:
+                  // ============================================================================
+                  /*
               ListTile(
                 leading: const Icon(Icons.checklist, color: Colors.red),
                 title: const Text('Entrega de EPP'),
@@ -838,25 +987,28 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                 },
               ),
               */
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.logout, color: Colors.red),
-                title: const Text(
-                  'Cerrar Sesión', 
-                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)
-                ),
-                onTap: () async {
-                  Navigator.pop(context); // Cierra el modal
-                  await AuthService.signOut();
-                  // Vuelve a la pantalla raíz: AuthGate muestra el login porque ya no hay sesión
-                  if (navegador.mounted) {
-                    navegador.popUntil((route) => route.isFirst);
-                  }
-                },
-              ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(Icons.logout, color: Colors.red),
+                    title: const Text(
+                      'Cerrar Sesión',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    onTap: () async {
+                      Navigator.pop(context); // Cierra el modal
+                      await AuthService.signOut();
+                      // Vuelve a la pantalla raíz: AuthGate muestra el login porque ya no hay sesión
+                      if (navegador.mounted) {
+                        navegador.popUntil((route) => route.isFirst);
+                      }
+                    },
+                  ),
 
-              // ============================================================================
-            ],
+                  // ============================================================================
+                ],
               ),
             ),
           ),
@@ -881,7 +1033,7 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
               // Cierra el diálogo de confirmación
-              Navigator.pop(context); 
+              Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Sesión cerrada correctamente')),
               );
@@ -971,11 +1123,17 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                     final grifo = resultados[index];
                     return ListTile(
                       leading: const Icon(Icons.location_on, color: Colors.red),
-                      title: Text(grifo['direccion_referencial'] ?? 'Sin dirección'),
-                      subtitle: Text('Lat: ${grifo['latitud']} - Lng: ${grifo['longitud']}'),
+                      title: Text(
+                        grifo['direccion_referencial'] ?? 'Sin dirección',
+                      ),
+                      subtitle: Text(
+                        'Lat: ${grifo['latitud']} - Lng: ${grifo['longitud']}',
+                      ),
                       onTap: () {
                         Navigator.pop(context); // Cerramos el panel
-                        _moverCamaraYSeleccionar(grifo); // Viajamos al grifo tocado
+                        _moverCamaraYSeleccionar(
+                          grifo,
+                        ); // Viajamos al grifo tocado
                       },
                     );
                   },
@@ -998,6 +1156,7 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
             myLocationEnabled: _miUbicacionHabilitada,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
+            mapToolbarEnabled: false,
             markers: _marcadores,
             // Capturamos el controlador apenas el mapa termina de cargar
             onMapCreated: (GoogleMapController controller) {
@@ -1005,7 +1164,10 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
               if (_ultimaPosicion != null) {
                 _mapController!.animateCamera(
                   CameraUpdate.newLatLngZoom(
-                    LatLng(_ultimaPosicion!.latitude, _ultimaPosicion!.longitude),
+                    LatLng(
+                      _ultimaPosicion!.latitude,
+                      _ultimaPosicion!.longitude,
+                    ),
                     16.5,
                   ),
                 );
@@ -1026,7 +1188,11 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                     child: CircleAvatar(
                       radius: 25,
                       backgroundColor: Colors.black.withOpacity(0.8),
-                      child: const Icon(Icons.home_rounded, color: Colors.white, size: 28),
+                      child: const Icon(
+                        Icons.home_rounded,
+                        color: Colors.white,
+                        size: 28,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -1039,24 +1205,35 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                       ),
                       child: TextField(
                         controller: _controladorBusqueda,
-                        style: const TextStyle(color: Colors.white, fontSize: 18),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                        ),
                         decoration: const InputDecoration(
                           hintText: 'Buscar...',
                           hintStyle: TextStyle(color: Colors.grey),
                           prefixIcon: Icon(Icons.search, color: Colors.white),
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: 15, horizontal: 15),
+                          contentPadding: EdgeInsets.symmetric(
+                            vertical: 15,
+                            horizontal: 15,
+                          ),
                         ),
                         onSubmitted: (valor) async {
                           if (valor.trim().isEmpty) return;
-                          
-                          final resultados = await _dbService.buscarGrifoPorDireccion(valor);
-                          
+
+                          final resultados = await _dbService
+                              .buscarGrifoPorDireccion(valor);
+
                           if (!context.mounted) return;
-                          
+
                           if (resultados.isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('No se encontraron grifos con esa dirección')),
+                              const SnackBar(
+                                content: Text(
+                                  'No se encontraron grifos con esa dirección',
+                                ),
+                              ),
                             );
                             return;
                           }
@@ -1072,7 +1249,9 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10), // Espacio entre el buscador y la foto
+                  const SizedBox(
+                    width: 10,
+                  ), // Espacio entre el buscador y la foto
                   // NUEVO: Ícono del perfil del Bombero (abre el menú inferior)
                   GestureDetector(
                     onTap: _mostrarMenuPerfil,
@@ -1086,74 +1265,39 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
               ),
             ),
           ),
-        ],  
+        ],
       ),
 
-      // Botón flotante para centrar el mapa en la ubicación del usuario
-      floatingActionButton: FloatingActionButton(
-        onPressed: _obtenerMiUbicacion,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.blueAccent,
-        elevation: 4,
-        shape: const CircleBorder(),
-        tooltip: 'Centrar en mi ubicación',
-        child: const Icon(Icons.my_location, size: 28),
-      ),
-
-      // Barra inferior con diseño moderno, bordes redondeados superiores, sombra y texto descriptivo
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.25),
-              blurRadius: 12,
-              offset: const Offset(0, -3),
+      // Botones flotantes apilados: Agregar grifo y Centrar ubicación GPS
+      floatingActionButton: Transform.translate(
+        // Movemos los botones hacia la derecha para alinear/tapar controles
+        offset: const Offset(10, 0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            // 1. BOTÓN AGREGAR (Posición "A")
+            FloatingActionButton(
+              heroTag: "btnAgregar",
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              elevation: 4,
+              tooltip: 'Registrar grifo',
+              onPressed: _mostrarFormularioGrifo,
+              child: const Icon(Icons.add_location_alt, color: Colors.black),
+            ),
+            const SizedBox(height: 16),
+            // 2. BOTÓN CENTRAR UBICACIÓN
+            FloatingActionButton(
+              heroTag: "btnCentrar",
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.blueAccent,
+              elevation: 4,
+              tooltip: 'Centrar en mi ubicación',
+              onPressed: _obtenerMiUbicacion,
+              child: const Icon(Icons.my_location, color: Colors.blue, size: 28),
             ),
           ],
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                // Botón Agregar
-                _buildItemInferior(
-                  icono: Icons.add_location_alt_rounded,
-                  colorIcono: Colors.white,
-                  etiqueta: 'Agregar',
-                  onTap: _mostrarFormularioGrifo,
-                ),
-                // Botón Editar
-                _buildItemInferior(
-                  icono: Icons.edit_location_alt_rounded,
-                  colorIcono: Colors.white,
-                  etiqueta: 'Editar',
-                  onTap: () {
-                    if (_grifoSeleccionadoId == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Primero toca un grifo en el mapa'),
-                        ),
-                      );
-                    } else {
-                      _mostrarFormularioEdicion();
-                    }
-                  },
-                ),
-                // Botón para Ir al grifo (Ruta)
-                _buildItemInferior(
-                  icono: Icons.directions_car_rounded,
-                  colorIcono: Colors.blueAccent,
-                  etiqueta: 'Ruta',
-                  onTap: _abrirRutaEnMaps,
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
@@ -1166,7 +1310,7 @@ void mostrarModalReporte(
   String grifoId, {
   VoidCallback? onActualizado,
 }) {
-  String estadoSeleccionado = 'operativo'; 
+  String estadoSeleccionado = 'operativo';
   final TextEditingController detalleController = TextEditingController();
   XFile? fotoSeleccionada;
   final ImagePicker picker = ImagePicker();
@@ -1182,9 +1326,15 @@ void mostrarModalReporte(
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Modificar Estado / Reportar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                const Text(
+                  'Modificar Estado / Reportar',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
                 const SizedBox(height: 8),
-                Text('Grifo: Nodo OSM: $nodoOsm', style: const TextStyle(fontSize: 14, color: Colors.grey)),
+                Text(
+                  'Grifo: Nodo OSM: $nodoOsm',
+                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+                ),
               ],
             ),
             content: SingleChildScrollView(
@@ -1192,7 +1342,10 @@ void mostrarModalReporte(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Nuevo Estado:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Nuevo Estado:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     value: estadoSeleccionado,
@@ -1205,16 +1358,32 @@ void mostrarModalReporte(
                       ),
                     ),
                     items: const [
-                      DropdownMenuItem(value: 'operativo', child: Text('Operativo')),
-                      DropdownMenuItem(value: 'con_falla', child: Text('Con Falla')),
-                      DropdownMenuItem(value: 'obstruido', child: Text('Obstruido')),
-                      DropdownMenuItem(value: 'inhabilitado', child: Text('Inhabilitado')),
+                      DropdownMenuItem(
+                        value: 'operativo',
+                        child: Text('Operativo'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'con_falla',
+                        child: Text('Con Falla'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'obstruido',
+                        child: Text('Obstruido'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'inhabilitado',
+                        child: Text('Inhabilitado'),
+                      ),
                     ],
-                    onChanged: (val) => setState(() => estadoSeleccionado = val!),
+                    onChanged: (val) =>
+                        setState(() => estadoSeleccionado = val!),
                   ),
                   const SizedBox(height: 16),
-                  
-                  const Text('Detalle del trabajo / reporte:', style: TextStyle(fontWeight: FontWeight.bold)),
+
+                  const Text(
+                    'Detalle del trabajo / reporte:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: detalleController,
@@ -1232,7 +1401,10 @@ void mostrarModalReporte(
                   const SizedBox(height: 16),
 
                   // Botones para la foto
-                  const Text('Adjuntar fotografía:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Adjuntar fotografía:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1241,7 +1413,10 @@ void mostrarModalReporte(
                         icon: const Icon(Icons.camera_alt, size: 18),
                         label: const Text('Cámara'),
                         onPressed: () async {
-                          final XFile? image = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+                          final XFile? image = await picker.pickImage(
+                            source: ImageSource.camera,
+                            imageQuality: 70,
+                          );
                           if (image != null) {
                             setState(() => fotoSeleccionada = image);
                           }
@@ -1251,7 +1426,10 @@ void mostrarModalReporte(
                         icon: const Icon(Icons.photo_library, size: 18),
                         label: const Text('Galería'),
                         onPressed: () async {
-                          final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+                          final XFile? image = await picker.pickImage(
+                            source: ImageSource.gallery,
+                            imageQuality: 70,
+                          );
                           if (image != null) {
                             setState(() => fotoSeleccionada = image);
                           }
@@ -1259,7 +1437,7 @@ void mostrarModalReporte(
                       ),
                     ],
                   ),
-                  
+
                   // Indicador visual si la foto se cargó
                   if (fotoSeleccionada != null) ...[
                     const SizedBox(height: 12),
@@ -1267,66 +1445,90 @@ void mostrarModalReporte(
                       children: [
                         const Icon(Icons.check_circle, color: Colors.green),
                         const SizedBox(width: 8),
-                        const Text('Foto adjunta', style: TextStyle(color: Colors.green)),
+                        const Text(
+                          'Foto adjunta',
+                          style: TextStyle(color: Colors.green),
+                        ),
                         const Spacer(),
                         IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => setState(() => fotoSeleccionada = null),
-                        )
+                          onPressed: () =>
+                              setState(() => fotoSeleccionada = null),
+                        ),
                       ],
-                    )
-                  ]
+                    ),
+                  ],
                 ],
               ),
             ),
             actions: [
               TextButton(
                 onPressed: guardando ? null : () => Navigator.pop(context),
-                child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+                child: const Text(
+                  'Cancelar',
+                  style: TextStyle(color: Colors.grey),
+                ),
               ),
               ElevatedButton(
-                onPressed: guardando ? null : () async {
-                  setState(() => guardando = true);
-                  
-                  try {
-                    await actualizarEstadoYReportar(
-                      grifoId: grifoId,
-                      nuevoEstado: estadoSeleccionado,
-                      detalle: detalleController.text,
-                      fotoXFile: fotoSeleccionada,
-                    );
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      onActualizado?.call();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('¡Estado y reporte actualizados con éxito! ✅')),
-                      );
-                    }
-                  } catch (e) {
-                    setState(() => guardando = false);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error al guardar: $e')),
-                      );
-                    }
-                  }
-                },
+                onPressed: guardando
+                    ? null
+                    : () async {
+                        setState(() => guardando = true);
+
+                        try {
+                          await actualizarEstadoYReportar(
+                            grifoId: grifoId,
+                            nuevoEstado: estadoSeleccionado,
+                            detalle: detalleController.text,
+                            fotoXFile: fotoSeleccionada,
+                          );
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            onActualizado?.call();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  '¡Estado y reporte actualizados con éxito! ✅',
+                                ),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          setState(() => guardando = false);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error al guardar: $e')),
+                            );
+                          }
+                        }
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blueAccent,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                child: guardando 
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text('Guardar', style: TextStyle(color: Colors.white)),
+                child: guardando
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        'Guardar',
+                        style: TextStyle(color: Colors.white),
+                      ),
               ),
             ],
           );
-        }
+        },
       );
     },
   );
 }
-
 
 // ==============================================================================
 // MODAL PARA REGISTRAR NUEVO GRIFO CON GPS AUTOMÁTICO
@@ -1343,7 +1545,7 @@ class _DialogoRegistrarGrifoState extends State<DialogoRegistrarGrifo> {
   final TextEditingController _latController = TextEditingController();
   final TextEditingController _lngController = TextEditingController();
   final TextEditingController _dirController = TextEditingController();
-  
+
   bool _obteniendoUbicacion = true;
   bool _guardando = false;
 
@@ -1370,14 +1572,15 @@ class _DialogoRegistrarGrifoState extends State<DialogoRegistrarGrifo> {
       LocationPermission permiso = await Geolocator.checkPermission();
       if (permiso == LocationPermission.denied) {
         permiso = await Geolocator.requestPermission();
-        if (permiso == LocationPermission.denied) throw Exception('Permiso denegado');
+        if (permiso == LocationPermission.denied)
+          throw Exception('Permiso denegado');
       }
       if (permiso == LocationPermission.deniedForever) {
         throw Exception('Permiso bloqueado permanentemente');
       }
 
       Position posicion = await Geolocator.getCurrentPosition();
-      
+
       if (mounted) {
         setState(() {
           _latController.text = posicion.latitude.toString();
@@ -1400,15 +1603,17 @@ class _DialogoRegistrarGrifoState extends State<DialogoRegistrarGrifo> {
   // Función para guardar en la base de datos
   Future<void> _guardarGrifo() async {
     if (_latController.text.isEmpty || _lngController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Faltan las coordenadas')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Faltan las coordenadas')));
       return;
     }
 
     if (_dirController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor, ingresa una dirección referencial')),
+        const SnackBar(
+          content: Text('Por favor, ingresa una dirección referencial'),
+        ),
       );
       return;
     }
@@ -1429,7 +1634,7 @@ class _DialogoRegistrarGrifoState extends State<DialogoRegistrarGrifo> {
           'longitud': double.parse(_lngController.text),
           'direccion_referencial': _dirController.text,
           'estado': 'operativo',
-          if (userId != null) 'creado_por': userId, 
+          if (userId != null) 'creado_por': userId,
         });
       }
 
@@ -1441,9 +1646,8 @@ class _DialogoRegistrarGrifoState extends State<DialogoRegistrarGrifo> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al guardar: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error al guardar: $e')));
       }
     } finally {
       if (mounted) setState(() => _guardando = false);
@@ -1456,7 +1660,10 @@ class _DialogoRegistrarGrifoState extends State<DialogoRegistrarGrifo> {
     return AlertDialog(
       backgroundColor: const Color(0xFFF5E6E6), // Color crema/rosado de fondo
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text('Registrar Nuevo Grifo', style: TextStyle(fontSize: 20)),
+      title: const Text(
+        'Registrar Nuevo Grifo',
+        style: TextStyle(fontSize: 20),
+      ),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1466,7 +1673,11 @@ class _DialogoRegistrarGrifoState extends State<DialogoRegistrarGrifo> {
                 padding: EdgeInsets.only(bottom: 16.0),
                 child: Row(
                   children: [
-                    SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                     SizedBox(width: 12),
                     Text('Buscando señal GPS...'),
                   ],
@@ -1476,25 +1687,37 @@ class _DialogoRegistrarGrifoState extends State<DialogoRegistrarGrifo> {
               controller: _latController,
               decoration: const InputDecoration(
                 labelText: 'Latitud',
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.grey),
+                ),
               ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+                signed: true,
+              ),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _lngController,
               decoration: const InputDecoration(
                 labelText: 'Longitud',
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.grey),
+                ),
               ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+                signed: true,
+              ),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _dirController,
               decoration: const InputDecoration(
                 labelText: 'Dirección Referencial *',
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.grey),
+                ),
               ),
               textCapitalization: TextCapitalization.sentences,
             ),
@@ -1512,10 +1735,16 @@ class _DialogoRegistrarGrifoState extends State<DialogoRegistrarGrifo> {
             backgroundColor: const Color(0xFFFAF0E6), // Fondo claro del botón
             foregroundColor: Colors.brown, // Letra café oscuro
             elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
-          child: _guardando 
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+          child: _guardando
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
               : const Text('Guardar'),
         ),
       ],

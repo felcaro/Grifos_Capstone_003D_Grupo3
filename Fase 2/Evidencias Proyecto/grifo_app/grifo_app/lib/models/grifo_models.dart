@@ -181,6 +181,7 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
             initialCameraPosition: _posicionInicial,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
+            mapToolbarEnabled: false,
             markers: _marcadores,
           ),
           SafeArea(
