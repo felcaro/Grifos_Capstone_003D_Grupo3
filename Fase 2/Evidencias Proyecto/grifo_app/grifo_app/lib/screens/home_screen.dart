@@ -65,31 +65,45 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  bool _modalAbierto = false;
+
   Future<void> _abrir(Widget pantalla) async {
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => pantalla));
-    if (mounted) _cargar(); // al volver, se actualizan los avisos
+    if (_modalAbierto) return;
+    _modalAbierto = true;
+    try {
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => pantalla));
+      if (mounted) _cargar(); // al volver, se actualizan los avisos
+    } finally {
+      if (mounted) _modalAbierto = false;
+    }
   }
 
-  void _confirmarSalir() {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Text('Cerrar sesión', style: TextStyle(color: AppColors.textoPrincipal)),
-        content: const Text('¿Seguro que quieres salir de tu cuenta?', style: TextStyle(color: AppColors.textoSecundario)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.rojo),
-            onPressed: () async {
-              Navigator.pop(context);
-              await AuthService.signOut(); // AuthGate muestra el login solo
-            },
-            child: const Text('Salir'),
-          ),
-        ],
-      ),
-    );
+  Future<void> _confirmarSalir() async {
+    if (_modalAbierto) return;
+    _modalAbierto = true;
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text('Cerrar sesión', style: TextStyle(color: AppColors.textoPrincipal)),
+          content: const Text('¿Seguro que quieres salir de tu cuenta?', style: TextStyle(color: AppColors.textoSecundario)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.rojo),
+              onPressed: () async {
+                Navigator.pop(context);
+                await AuthService.signOut(); // AuthGate muestra el login solo
+              },
+              child: const Text('Salir'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) _modalAbierto = false;
+    }
   }
 
   Permisos get _permisos => Permisos.deRol(_perfil?['rol']);

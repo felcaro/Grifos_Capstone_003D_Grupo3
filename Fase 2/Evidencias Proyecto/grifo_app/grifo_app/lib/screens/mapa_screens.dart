@@ -49,6 +49,9 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
   Position? _ultimaPosicion;
   BitmapDescriptor _iconoGrifo = BitmapDescriptor.defaultMarker;
 
+  // Control para evitar abrir múltiples ventanas emergentes / modales simultáneamente
+  bool _modalAbierto = false;
+
   @override
   void initState() {
     super.initState();
@@ -182,13 +185,19 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
   }
 
   Future<void> _mostrarFormularioGrifo() async {
-    final fueGuardado = await showDialog<bool>(
-      context: context,
-      builder: (context) => const DialogoRegistrarGrifo(),
-    );
+    if (_modalAbierto) return;
+    _modalAbierto = true;
+    try {
+      final fueGuardado = await showDialog<bool>(
+        context: context,
+        builder: (context) => const DialogoRegistrarGrifo(),
+      );
 
-    if (fueGuardado == true) {
-      _cargarGrifos();
+      if (fueGuardado == true) {
+        _cargarGrifos();
+      }
+    } finally {
+      if (mounted) _modalAbierto = false;
     }
   }
 
@@ -259,98 +268,219 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
   */
 
   // NUEVO: Formulario para editar un grifo existente
-  void _mostrarFormularioEdicion([Map<String, dynamic>? grifo]) {
-    // Buscamos los datos del grifo seleccionado para rellenar los campos de texto
-    final grifoActual =
-        grifo ??
-        _listaGrifos.firstWhere(
-          (g) => g['id'].toString() == _grifoSeleccionadoId,
-        );
-    final idGrifo = grifoActual['id'].toString();
+  Future<void> _mostrarFormularioEdicion([Map<String, dynamic>? grifo]) async {
+    if (_modalAbierto) return;
+    _modalAbierto = true;
+    try {
+      // Buscamos los datos del grifo seleccionado para rellenar los campos de texto
+      final grifoActual =
+          grifo ??
+          _listaGrifos.firstWhere(
+            (g) => g['id'].toString() == _grifoSeleccionadoId,
+          );
+      final idGrifo = grifoActual['id'].toString();
 
-    final latController = TextEditingController(
-      text: grifoActual['latitud'].toString(),
-    );
-    final lngController = TextEditingController(
-      text: grifoActual['longitud'].toString(),
-    );
-    final dirController = TextEditingController(
-      text: grifoActual['direccion_referencial']?.toString() ?? '',
-    );
+      final latController = TextEditingController(
+        text: grifoActual['latitud'].toString(),
+      );
+      final lngController = TextEditingController(
+        text: grifoActual['longitud'].toString(),
+      );
+      final dirController = TextEditingController(
+        text: grifoActual['direccion_referencial']?.toString() ?? '',
+      );
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Modificar Grifo'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: latController,
-              decoration: const InputDecoration(labelText: 'Latitud'),
-            ),
-            TextField(
-              controller: lngController,
-              decoration: const InputDecoration(labelText: 'Longitud'),
-            ),
-            TextField(
-              controller: dirController,
-              decoration: const InputDecoration(
-                labelText: 'Dirección Referencial *',
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Modificar Grifo'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: latController,
+                decoration: const InputDecoration(labelText: 'Latitud'),
               ),
+              TextField(
+                controller: lngController,
+                decoration: const InputDecoration(labelText: 'Longitud'),
+              ),
+              TextField(
+                controller: dirController,
+                decoration: const InputDecoration(
+                  labelText: 'Dirección Referencial *',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                try {
+                  await _dbService.actualizarGrifo(
+                    idGrifo,
+                    double.parse(latController.text),
+                    double.parse(lngController.text),
+                    dirController.text,
+                  );
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('¡Grifo actualizado! 🛠️')),
+                    );
+                    setState(
+                      () => _grifoSeleccionadoId = null,
+                    ); // Limpiamos la selección
+                    _cargarGrifos();
+                    // Recargamos el mapa
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(SnackBar(content: Text('Error: $e')));
+                  }
+                }
+              },
+              child: const Text('Actualizar'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              try {
-                await _dbService.actualizarGrifo(
-                  idGrifo,
-                  double.parse(latController.text),
-                  double.parse(lngController.text),
-                  dirController.text,
-                );
+      );
+    } finally {
+      if (mounted) _modalAbierto = false;
+    }
+  }
 
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('¡Grifo actualizado! 🛠️')),
-                  );
-                  setState(
-                    () => _grifoSeleccionadoId = null,
-                  ); // Limpiamos la selección
-                  _cargarGrifos();
-                  // Recargamos el mapa
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text('Error: $e')));
-                }
-              }
-            },
-            child: const Text('Actualizar'),
-          ),
-        ],
-      ),
-    );
+  // Consulta a Supabase para obtener el creador del grifo y el último bombero que reportó
+  Future<Map<String, String>> _obtenerInfoResponsablesGrifo(Map<String, dynamic> grifo) async {
+    String creador = 'Sin registrar';
+    String ultimoReportePor = 'Sin reportes';
+    final grifoId = grifo['id'];
+
+    // 1. Obtener nombre del creador (tabla grifo -> creado_por -> tabla usuario)
+    try {
+      final creadoPorId = grifo['creado_por'];
+      if (creadoPorId != null && creadoPorId.toString().isNotEmpty) {
+        final u = await Supabase.instance.client
+            .from('usuario')
+            .select('nombre')
+            .eq('id', creadoPorId)
+            .maybeSingle();
+        if (u != null && u['nombre'] != null) {
+          creador = u['nombre'].toString();
+        }
+      } else {
+        final g = await Supabase.instance.client
+            .from('grifo')
+            .select('creado_por, usuario_creador:usuario!creado_por(nombre)')
+            .eq('id', grifoId)
+            .maybeSingle();
+        if (g != null && g['usuario_creador'] != null && g['usuario_creador']['nombre'] != null) {
+          creador = g['usuario_creador']['nombre'].toString();
+        } else if (g != null && g['creado_por'] != null) {
+          final u = await Supabase.instance.client
+              .from('usuario')
+              .select('nombre')
+              .eq('id', g['creado_por'])
+              .maybeSingle();
+          if (u != null && u['nombre'] != null) {
+            creador = u['nombre'].toString();
+          }
+        }
+      }
+    } catch (_) {
+      try {
+        final g = await Supabase.instance.client
+            .from('grifo')
+            .select('creado_por')
+            .eq('id', grifoId)
+            .maybeSingle();
+        if (g != null && g['creado_por'] != null) {
+          final u = await Supabase.instance.client
+              .from('usuario')
+              .select('nombre')
+              .eq('id', g['creado_por'])
+              .maybeSingle();
+          if (u != null && u['nombre'] != null) {
+            creador = u['nombre'].toString();
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 2. Obtener el último reporte de falla y el nombre de quién lo hizo
+    try {
+      final ultimoReporte = await Supabase.instance.client
+          .from('reporte_falla')
+          .select('usuario_id, fecha_creacion, usuario:usuario!usuario_id(nombre)')
+          .eq('grifo_id', grifoId)
+          .order('fecha_creacion', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (ultimoReporte != null) {
+        if (ultimoReporte['usuario'] != null && ultimoReporte['usuario']['nombre'] != null) {
+          ultimoReportePor = ultimoReporte['usuario']['nombre'].toString();
+        } else if (ultimoReporte['usuario_id'] != null) {
+          final u = await Supabase.instance.client
+              .from('usuario')
+              .select('nombre')
+              .eq('id', ultimoReporte['usuario_id'])
+              .maybeSingle();
+          if (u != null && u['nombre'] != null) {
+            ultimoReportePor = u['nombre'].toString();
+          } else {
+            ultimoReportePor = 'Bombero registrado';
+          }
+        }
+      }
+    } catch (_) {
+      try {
+        final ultimoReporte = await Supabase.instance.client
+            .from('reporte_falla')
+            .select('usuario_id, fecha_creacion')
+            .eq('grifo_id', grifoId)
+            .order('fecha_creacion', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        if (ultimoReporte != null && ultimoReporte['usuario_id'] != null) {
+          final u = await Supabase.instance.client
+              .from('usuario')
+              .select('nombre')
+              .eq('id', ultimoReporte['usuario_id'])
+              .maybeSingle();
+          if (u != null && u['nombre'] != null) {
+            ultimoReportePor = u['nombre'].toString();
+          }
+        }
+      } catch (_) {}
+    }
+
+    return {
+      'creador': creador,
+      'ultimoReportePor': ultimoReportePor,
+    };
   }
 
   // Panel inferior con el diseño moderno del detalle del grifo
-  void _mostrarDetalleGrifo(Map<String, dynamic> grifoData) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
+  Future<void> _mostrarDetalleGrifo(Map<String, dynamic> grifoData) async {
+    if (_modalAbierto) return;
+    _modalAbierto = true;
+    String? accionSiguiente;
+    try {
+      accionSiguiente = await showModalBottomSheet<String>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (context) {
         return Container(
           padding: const EdgeInsets.all(20),
           decoration: const BoxDecoration(
@@ -450,9 +580,73 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                     );
                   },
                 ),
-                const SizedBox(
-                  height: 16,
-                ), // Espacio antes del siguiente elemento
+
+                // Información del Creador y Último reporte
+                FutureBuilder<Map<String, String>>(
+                  future: _obtenerInfoResponsablesGrifo(grifoData),
+                  builder: (context, snapshot) {
+                    final creador = snapshot.data?['creador'] ?? 'Cargando...';
+                    final ultimoReportePor =
+                        snapshot.data?['ultimoReportePor'] ?? 'Cargando...';
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 16),
+                        const Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: Color(0xFFE6D9DE),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Creador del grifo
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.person_add,
+                              color: Colors.grey,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Registrado por: $creador',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Último en reportar
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.history_edu,
+                              color: Colors.grey,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Último reporte: $ultimoReportePor',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
                 // 5. Botones de acción (Ir ruta, Modificar, Reporte) con estilo de colores
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -502,10 +696,7 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () {
-                          Navigator.pop(context); // Cierra el bottom sheet
-                          _mostrarFormularioEdicion(
-                            grifoData,
-                          ); // Lógica para editar la información base del grifo
+                          Navigator.pop(context, 'modificar'); // Cierra el bottom sheet indicando modificar
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFF57C00),
@@ -531,17 +722,7 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () {
-                          Navigator.pop(context); // Cierra el bottom sheet
-                          // Conectamos la función para subir la foto y el detalle del reporte
-                          mostrarModalReporte(
-                            context,
-                            (grifoData['nodo_osm'] ??
-                                    grifoData['direccion_referencial'] ??
-                                    grifoData['id'])
-                                .toString(),
-                            grifoData['id'].toString(),
-                            onActualizado: _cargarGrifos,
-                          );
+                          Navigator.pop(context, 'reporte'); // Cierra el bottom sheet indicando reporte
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFD32F2F),
@@ -571,35 +752,54 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
         );
       },
     );
+  } finally {
+    if (mounted) _modalAbierto = false;
   }
 
+  if (!mounted) return;
+  if (accionSiguiente == 'modificar') {
+    _mostrarFormularioEdicion(grifoData);
+  } else if (accionSiguiente == 'reporte') {
+    _mostrarDialogReporteEstado(grifoData);
+  }
+}
+
   // Diálogo para escribir el detalle del reporte y modificar estado del grifo
-  void _mostrarDialogReporteEstado(Map<String, dynamic> grifoData) {
-    mostrarModalReporte(
-      context,
-      (grifoData['nodo_osm'] ??
-              grifoData['direccion_referencial'] ??
-              grifoData['id'])
-          .toString(),
-      grifoData['id'].toString(),
-      onActualizado: _cargarGrifos,
-    );
+  Future<void> _mostrarDialogReporteEstado(Map<String, dynamic> grifoData) async {
+    if (_modalAbierto) return;
+    _modalAbierto = true;
+    try {
+      await mostrarModalReporte(
+        context,
+        (grifoData['nodo_osm'] ??
+                grifoData['direccion_referencial'] ??
+                grifoData['id'])
+            .toString(),
+        grifoData['id'].toString(),
+        onActualizado: _cargarGrifos,
+      );
+    } finally {
+      if (mounted) _modalAbierto = false;
+    }
   }
 
   // Diálogo para ver el detalle o historial del reporte
-  void _mostrarDetalleReporte(Map<String, dynamic> grifo) {
-    final estadoActual = grifo['estado'] ?? 'operativo';
-    final ultimaRevision = grifo['ultima_revision'] != null
-        ? DateTime.tryParse(grifo['ultima_revision'].toString())
-                  ?.toLocal()
-                  .toString()
-                  .split('.')[0] ??
-              'Sin revisión'
-        : 'Sin revisión registrada';
+  Future<void> _mostrarDetalleReporte(Map<String, dynamic> grifo) async {
+    if (_modalAbierto) return;
+    _modalAbierto = true;
+    try {
+      final estadoActual = grifo['estado'] ?? 'operativo';
+      final ultimaRevision = grifo['ultima_revision'] != null
+          ? DateTime.tryParse(grifo['ultima_revision'].toString())
+                    ?.toLocal()
+                    .toString()
+                    .split('.')[0] ??
+                'Sin revisión'
+          : 'Sin revisión registrada';
 
-    showDialog(
-      context: context,
-      builder: (context) {
+      await showDialog(
+        context: context,
+        builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFFF5E6E6),
           title: Text(
@@ -724,7 +924,10 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
         );
       },
     );
+  } finally {
+    if (mounted) _modalAbierto = false;
   }
+}
 
   // Función para abrir Google Maps / Waze con la ruta hacia el grifo
   Future<void> _abrirRutaEnMaps() async {
@@ -772,32 +975,33 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
   // ===========================================================================
 
   Future<void> _mostrarMenuPerfil() async {
-    // Obtenemos el correo del usuario con el que se inició sesión en Supabase
-    final String emailUsuario = AuthService.currentEmail ?? 'Usuario';
+    if (_modalAbierto) return;
+    _modalAbierto = true;
 
-    // Perfil real (nombre y rol) para mostrarlo y decidir si ve la administración
-    Map<String, dynamic>? perfil;
     try {
-      perfil = await SupabaseService().obtenerMiPerfil();
-    } catch (_) {
-      perfil = null;
-    }
-    int alertasCarros = 0;
-    try {
-      final carros = await SupabaseService().obtenerCarros();
-      alertasCarros = carros.where((c) => alertasActivas(c).isNotEmpty).length;
-    } catch (_) {
-      alertasCarros = 0;
-    }
-    if (!mounted) return;
-    final navegador = Navigator.of(
-      context,
-    ); // para poder volver a la raíz al cerrar sesión
-    final String rolPerfil = (perfil?['rol'] ?? '').toString().toLowerCase();
-    final bool esAdmin = rolPerfil == 'administrador';
-    final String nombrePerfil = (perfil?['nombre'] ?? '').toString();
+      // Obtenemos el correo del usuario con el que se inició sesión en Supabase
+      final String emailUsuario = AuthService.currentEmail ?? 'Usuario';
 
-    showModalBottomSheet(
+      // Perfil real (nombre y rol) para mostrarlo y decidir si ve la administración
+      Map<String, dynamic>? perfil;
+      try {
+        perfil = await SupabaseService().obtenerMiPerfil();
+      } catch (_) {
+        perfil = null;
+      }
+      int alertasCarros = 0;
+      try {
+        final carros = await SupabaseService().obtenerCarros();
+        alertasCarros = carros.where((c) => alertasActivas(c).isNotEmpty).length;
+      } catch (_) {
+        alertasCarros = 0;
+      }
+      if (!mounted) return;
+      final String rolPerfil = (perfil?['rol'] ?? '').toString().toLowerCase();
+      final bool esAdmin = rolPerfil == 'administrador';
+      final String nombrePerfil = (perfil?['nombre'] ?? '').toString();
+
+      await showModalBottomSheet(
       context: context,
       isScrollControlled:
           true, // permite que el panel crezca y se pueda desplazar
@@ -987,26 +1191,6 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
                 },
               ),
               */
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(Icons.logout, color: Colors.red),
-                    title: const Text(
-                      'Cerrar Sesión',
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    onTap: () async {
-                      Navigator.pop(context); // Cierra el modal
-                      await AuthService.signOut();
-                      // Vuelve a la pantalla raíz: AuthGate muestra el login porque ya no hay sesión
-                      if (navegador.mounted) {
-                        navegador.popUntil((route) => route.isFirst);
-                      }
-                    },
-                  ),
-
                   // ============================================================================
                 ],
               ),
@@ -1015,37 +1199,10 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
         );
       },
     );
+  } finally {
+    if (mounted) _modalAbierto = false;
   }
-
-  // Alerta de confirmación para salir
-  void confirmarCerrarSesion() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Cerrar Sesión'),
-        content: const Text('¿Estás seguro de que deseas salir de tu cuenta?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context), // Cancela la acción
-            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              // Cierra el diálogo de confirmación
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Sesión cerrada correctamente')),
-              );
-              // Cierra la sesión en Supabase y redirige a Login automáticamente vía AuthGate
-              await AuthService.signOut();
-            },
-            child: const Text('Salir', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
+}
 
   Widget _buildItemInferior({
     required IconData icono,
@@ -1097,53 +1254,62 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
   }
 
   // Despliega un panel inferior con la lista de resultados cuando hay 2 o más coincidencias
-  void _mostrarListaResultados(List<Map<String, dynamic>> resultados) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min, // Se adapta al contenido
-            children: [
-              const Text(
-                'Grifos encontrados',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const Divider(),
-              // Flexible evita que la lista desborde la pantalla en caso de muchas coincidencias
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: resultados.length,
-                  itemBuilder: (context, index) {
-                    final grifo = resultados[index];
-                    return ListTile(
-                      leading: const Icon(Icons.location_on, color: Colors.red),
-                      title: Text(
-                        grifo['direccion_referencial'] ?? 'Sin dirección',
-                      ),
-                      subtitle: Text(
-                        'Lat: ${grifo['latitud']} - Lng: ${grifo['longitud']}',
-                      ),
-                      onTap: () {
-                        Navigator.pop(context); // Cerramos el panel
-                        _moverCamaraYSeleccionar(
-                          grifo,
-                        ); // Viajamos al grifo tocado
-                      },
-                    );
-                  },
+  Future<void> _mostrarListaResultados(List<Map<String, dynamic>> resultados) async {
+    if (_modalAbierto) return;
+    _modalAbierto = true;
+    Map<String, dynamic>? grifoElegido;
+    try {
+      grifoElegido = await showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (context) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min, // Se adapta al contenido
+              children: [
+                const Text(
+                  'Grifos encontrados',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
+                const Divider(),
+                // Flexible evita que la lista desborde la pantalla en caso de muchas coincidencias
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: resultados.length,
+                    itemBuilder: (context, index) {
+                      final grifo = resultados[index];
+                      return ListTile(
+                        leading: const Icon(Icons.location_on, color: Colors.red),
+                        title: Text(
+                          grifo['direccion_referencial'] ?? 'Sin dirección',
+                        ),
+                        subtitle: Text(
+                          'Lat: ${grifo['latitud']} - Lng: ${grifo['longitud']}',
+                        ),
+                        onTap: () {
+                          Navigator.pop(context, grifo); // Cerramos el panel y enviamos el grifo seleccionado
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    } finally {
+      if (mounted) _modalAbierto = false;
+    }
+
+    if (!mounted) return;
+    if (grifoElegido != null) {
+      _moverCamaraYSeleccionar(grifoElegido); // Viajamos al grifo tocado
+    }
   }
 
   @override
@@ -1304,7 +1470,7 @@ class _MapaPrincipalState extends State<MapaPrincipal> {
   }
 }
 
-void mostrarModalReporte(
+Future<void> mostrarModalReporte(
   BuildContext context,
   String nodoOsm,
   String grifoId, {
@@ -1316,7 +1482,7 @@ void mostrarModalReporte(
   final ImagePicker picker = ImagePicker();
   bool guardando = false;
 
-  showDialog(
+  return showDialog(
     context: context,
     builder: (context) {
       return StatefulBuilder(

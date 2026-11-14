@@ -162,11 +162,11 @@ Future<String?> subirComprobanteBoleta(Uint8List bytes, String extension) async 
   Future<void> insertarGrifo(double lat, double lng, String direccion) =>
       insertarGrifoPrueba(lat, lng, direccion);
 
-  // Traer todos los grifos
+  // Traer todos los grifos (incluyendo creado_por, nodo_osm, estado, etc.)
   Future<List<Map<String, dynamic>>> obtenerGrifos() async {
     final respuesta = await _client
         .from('grifo')
-        .select('id, latitud, longitud, direccion_referencial');
+        .select('*');
     return respuesta;
   }
 
