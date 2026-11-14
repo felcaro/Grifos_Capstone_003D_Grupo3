@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/app_links.dart';
 import '../utils/permisos.dart';
 
 /// Helper con utilidades comunes de autenticación para usar en cualquier parte de la app.
@@ -41,9 +42,41 @@ class AuthService {
   }
 
   /// Cierra la sesión activa.
-    /// Cierra la sesión activa.
   static Future<void> signOut() async {
     Permisos.limpiar();
     await _client.auth.signOut();
+  }
+
+  /// Envía un correo con el enlace para restablecer la contraseña.
+  /// El enlace del correo siempre abre la versión web (en web, la misma
+  /// dirección; en la app, AppLinks.webUrl). Debe estar en Supabase >
+  /// Authentication > URL Configuration.
+  static Future<void> enviarRecuperacion(String email) {
+    return _client.auth.resetPasswordForEmail(
+      email.trim(),
+      redirectTo: kIsWeb ? Uri.base.origin : AppLinks.webUrl,
+    );
+  }
+
+  /// Cambia la contraseña de la sesión activa (también al volver del enlace
+  /// de recuperación).
+  static Future<void> cambiarPassword(String nueva) async {
+    await _client.auth.updateUser(UserAttributes(password: nueva));
+  }
+
+  /// Comprueba la contraseña actual volviendo a iniciar sesión con ella.
+  static Future<void> verificarPassword(String actual) async {
+    final email = currentEmail;
+    if (email == null) throw const AuthException('No hay sesión activa');
+    await _client.auth.signInWithPassword(email: email, password: actual);
+  }
+
+  /// Pide el cambio de correo. Supabase envía un enlace de confirmación al
+  /// correo nuevo (y puede pedir confirmar también en el antiguo).
+  static Future<void> cambiarCorreo(String nuevo) async {
+    await _client.auth.updateUser(
+      UserAttributes(email: nuevo.trim()),
+      emailRedirectTo: kIsWeb ? Uri.base.origin : AppLinks.webUrl,
+    );
   }
 }

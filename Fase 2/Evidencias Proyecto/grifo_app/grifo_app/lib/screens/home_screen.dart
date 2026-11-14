@@ -10,6 +10,7 @@ import 'admin_usuarios_screen.dart';
 import 'inventario_carro_screen.dart';
 import 'lista_grifos_screen.dart';
 import 'mapa_screens.dart';
+import 'perfil_screen.dart';
 import 'personal_screen.dart';
 import 'tesoreria_screen.dart';
 
@@ -137,6 +138,7 @@ class _HomeScreenState extends State<HomeScreen> {
         foregroundColor: Colors.white,
         title: const Text('GrifoApp'),
         actions: [
+          IconButton(icon: const Icon(Icons.account_circle), tooltip: 'Mi perfil', onPressed: () => _abrir(const PerfilScreen())),
           IconButton(icon: const Icon(Icons.logout), tooltip: 'Cerrar sesión', onPressed: _confirmarSalir),
         ],
       ),

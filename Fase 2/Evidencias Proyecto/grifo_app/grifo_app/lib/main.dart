@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -8,14 +9,25 @@ import 'widgets/auth_gate.dart'; // Compuerta de autenticación
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inicializamos Supabase usando nuestra configuración segura
-  await Supabase.initialize(url: Env.supabaseUrl, anonKey: Env.supabaseAnonKey);
+  // ¿Se abrió desde el enlace de "recuperar contraseña"? Hay que verlo ANTES de
+  // inicializar Supabase: el evento passwordRecovery se emite durante la
+  // inicialización y la interfaz aún no lo escucha.
+  final recuperacion = kIsWeb && Uri.base.toString().contains('type=recovery');
 
-  runApp(const MyApp());
+  // Flujo implícito: el enlace del correo funciona aunque se abra en otro
+  // navegador o dispositivo (con PKCE solo sirve en el que lo pidió).
+  await Supabase.initialize(
+    url: Env.supabaseUrl,
+    anonKey: Env.supabaseAnonKey,
+    authOptions: const FlutterAuthClientOptions(authFlowType: AuthFlowType.implicit),
+  );
+
+  runApp(MyApp(recuperacion: recuperacion));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final bool recuperacion;
+  const MyApp({super.key, this.recuperacion = false});
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +37,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.red),
       ),
-      home: const AuthGate(home: HomeScreen()),
+      home: AuthGate(home: const HomeScreen(), recuperacionInicial: recuperacion),
     );
   }
 }

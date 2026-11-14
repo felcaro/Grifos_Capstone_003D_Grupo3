@@ -1,6 +1,10 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
+import '../config/app_links.dart';
+import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -27,6 +31,42 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _cargando = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    // Enlace del correo vencido o ya usado (los antivirus/correos a veces lo abren antes).
+    final url = Uri.base.toString();
+    if (kIsWeb && (url.contains('otp_expired') || url.contains('error_code='))) {
+      _error = 'El enlace del correo venció o ya fue usado. Pide uno nuevo con "¿Olvidaste tu contraseña?".';
+    }
+    // Llegada desde la app móvil: la web abre directo "Recuperar contraseña".
+    if (kIsWeb && Uri.base.queryParameters['recuperar'] == '1') {
+      final email = Uri.base.queryParameters['email'] ?? '';
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _emailController.text = email;
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => ForgotPasswordScreen(emailInicial: email),
+        ));
+      });
+    }
+  }
+
+  Future<void> _olvideContrasena() async {
+    final email = _emailController.text.trim();
+    if (kIsWeb) {
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ForgotPasswordScreen(emailInicial: email),
+      ));
+      return;
+    }
+    // En la app: se continúa en la versión web.
+    final ok = await launchUrl(AppLinks.recuperar(email), mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      setState(() => _error = 'No se pudo abrir el navegador');
+    }
+  }
 
   @override
   void dispose() {
@@ -116,7 +156,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         ? 'Mínimo 6 caracteres'
                         : null,
                   ),
-                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: _cargando ? null : _olvideContrasena,
+                      child: const Text('¿Olvidaste tu contraseña?'),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   if (_error != null) ...[
                     Container(
                       padding: const EdgeInsets.all(10),
