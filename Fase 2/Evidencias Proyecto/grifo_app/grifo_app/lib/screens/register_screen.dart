@@ -99,7 +99,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             backgroundColor: Colors.white,
             title: const Text('Cuenta creada', style: TextStyle(color: AppColors.textoPrincipal)),
             content: const Text(
-              'Te enviamos un correo para confirmar tu cuenta. Confírmalo y luego inicia sesión.',
+              'Te enviamos un correo para confirmar tu cuenta. Confírmalo y luego inicia sesión. Después, un administrador de tu compañía debe verificarte para que puedas usar la aplicación.',
               style: TextStyle(color: AppColors.textoSecundario),
             ),
             actions: [
@@ -112,7 +112,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('¡Cuenta creada! Bienvenido/a, $nombre')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('¡Cuenta creada, $nombre! Un administrador debe verificarte antes de que puedas usar la app.'), duration: const Duration(seconds: 8)));
       }
 
       // Si ya hay sesión, AuthGate muestra la app; si no, queda el login.

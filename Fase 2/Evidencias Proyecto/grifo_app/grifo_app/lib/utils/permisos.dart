@@ -8,8 +8,9 @@ import '../services/supabase_service.dart';
 /// con RLS: ver permisos_por_rol.sql; esto solo esconde lo que no corresponde.)
 ///
 /// Roles: administrador, directorio, capitan, tesorero, bombero.
-/// Un rol desconocido o sin perfil cargado se trata como "bombero" (lo más
-/// restringido), para no mostrar de más por error.
+/// Una cuenta nueva queda como "pendiente" (sin verificar): no ve ni modifica
+/// nada hasta que un administrador le asigna un rol. Un rol desconocido o sin
+/// perfil cargado se trata igual que "pendiente" (sin acceso).
 class Permisos {
   final String rol;
   const Permisos._(this.rol);
@@ -24,19 +25,24 @@ class Permisos {
   /// Mismos roles que la función soy_oficial() de la base de datos (equipo personal).
   static const _rolesOficiales = {'administrador', 'capitan', 'directorio'};
 
-  /// true para bombero (y para cualquier rol no reconocido).
+  static const _rolesVerificados = {'administrador', 'directorio', 'capitan', 'tesorero', 'bombero'};
+
+  /// true si un administrador ya verificó a la persona (tiene un rol real).
+  bool get verificado => _rolesVerificados.contains(rol);
+
+  /// true para bombero y para cuentas sin verificar.
   bool get esRestringido => !_rolesDeGestion.contains(rol);
   bool get esAdmin => rol == 'administrador';
   bool get esOficial => _rolesOficiales.contains(rol);
 
   // ---- Qué ventanas se ven ----
-  bool get verMapa => true;
-  bool get verGrifos => true;
-  bool get verCarros => true;
-  bool get verEquipoPersonal => true; // el bombero ve solo el suyo (ver verTodoElPersonal)
-  bool get verParteServicio => true;
-  bool get verActaDirectorio => !esRestringido;
-  bool get verTodasLasActas => !esRestringido; // el bombero solo ve partes de servicio
+  bool get verMapa => verificado;
+  bool get verGrifos => verificado;
+  bool get verCarros => verificado;
+  bool get verEquipoPersonal => verificado; // el bombero ve solo el suyo (ver verTodoElPersonal)
+  bool get verParteServicio => verificado;
+  bool get verActaDirectorio => verificado && !esRestringido;
+  bool get verTodasLasActas => verificado && !esRestringido; // el bombero solo ve partes de servicio
   // Igual que las políticas de movimiento_tesoreria: lectura solo Tesorero y Directorio.
   // (Para que el administrador también la vea: agrega || esAdmin aquí Y en la
   //  política de lectura de la base de datos.)
@@ -44,10 +50,10 @@ class Permisos {
   bool get verAdministracion => esAdmin;
 
   // ---- Qué se puede modificar ----
-  bool get editarGrifos => true; // agregar y cambiar el estado de un grifo
-  bool get editarCarros => !esRestringido; // carros, compartimentos, ítems, mantención
+  bool get editarGrifos => verificado; // agregar y cambiar el estado de un grifo
+  bool get editarCarros => verificado && !esRestringido; // carros, compartimentos, ítems, mantención
   bool get verTodoElPersonal => esOficial; // si no: solo su propio equipo (como soy_oficial())
-  bool get editarEquipoPropio => true; // su traje e implementos
+  bool get editarEquipoPropio => verificado; // su traje e implementos
 
   // ---- Carga y caché del rol del usuario actual ----
   static Permisos? _cache;

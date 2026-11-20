@@ -5,7 +5,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_styles.dart';
 
 /// Roles que maneja el sistema y lo que permite cada uno.
-const rolesDisponibles = ['administrador', 'directorio', 'capitan', 'tesorero', 'bombero'];
+const rolesDisponibles = ['administrador', 'directorio', 'capitan', 'tesorero', 'bombero', 'pendiente'];
 
 const _descripcionRol = {
   'administrador': 'Gestiona usuarios y roles, y tiene acceso a todos los módulos.',
@@ -13,6 +13,7 @@ const _descripcionRol = {
   'capitan': 'Gestiona el equipo personal y los registros de su compañía.',
   'tesorero': 'Registra ingresos, egresos y rendiciones de tesorería.',
   'bombero': 'Consulta grifos, inventario y su propio equipo personal.',
+  'pendiente': 'Cuenta nueva sin verificar: no ve ni modifica nada hasta que un administrador le asigne un rol.',
 };
 
 String etiquetaRol(String rol) {
@@ -27,6 +28,8 @@ String etiquetaRol(String rol) {
       return 'Tesorero';
     case 'bombero':
       return 'Bombero';
+    case 'pendiente':
+      return 'Sin verificar';
     default:
       return rol.isEmpty ? 'Sin rol' : rol;
   }
@@ -42,6 +45,8 @@ Color _colorRol(String rol) {
       return Colors.orange.shade800;
     case 'tesorero':
       return Colors.teal.shade600;
+    case 'pendiente':
+      return Colors.amber.shade800;
     default:
       return Colors.blueGrey.shade500;
   }
@@ -60,17 +65,26 @@ class AdminUsuariosScreen extends StatefulWidget {
 
 class _AdminUsuariosScreenState extends State<AdminUsuariosScreen> {
   final _db = SupabaseService();
+  final _buscador = TextEditingController();
 
   Map<String, dynamic>? _perfil;
   List<Map<String, dynamic>> _usuarios = [];
   bool _cargando = true;
   String? _error;
   String _filtro = '';
+  String _filtroRol = 'todos'; // 'todos' o uno de rolesDisponibles
+  String _orden = 'nuevos'; // nuevos | antiguos | nombre
 
   @override
   void initState() {
     super.initState();
     _cargar();
+  }
+
+  @override
+  void dispose() {
+    _buscador.dispose();
+    super.dispose();
   }
 
   Future<void> _cargar() async {
@@ -80,7 +94,7 @@ class _AdminUsuariosScreenState extends State<AdminUsuariosScreen> {
     });
     try {
       final perfil = await _db.obtenerMiPerfil();
-      final usuarios = await _db.obtenerUsuariosAdmin();
+      final usuarios = await _leerUsuarios();
       if (!mounted) return;
       setState(() {
         _perfil = perfil;
@@ -96,6 +110,77 @@ class _AdminUsuariosScreenState extends State<AdminUsuariosScreen> {
     }
   }
 
+  /// Lee las personas de la compañía. Pide también N° de voluntario/maquinista y la
+  /// fecha de registro; si la base aún no tiene esas columnas, reintenta sin ellas.
+  Future<List<Map<String, dynamic>>> _leerUsuarios() async {
+    final companiaId = await _db.obtenerCompaniaIdUsuarioActual();
+    if (companiaId == null) return [];
+    final client = Supabase.instance.client;
+    try {
+      final filas = await client
+          .from('usuario')
+          .select('id, nombre, credencial, rol, numero_voluntario, numero_maquinista, created_at')
+          .eq('compania_id', companiaId);
+      return List<Map<String, dynamic>>.from(filas);
+    } catch (_) {
+      final filas = await client.from('usuario').select('id, nombre, credencial, rol').eq('compania_id', companiaId);
+      return List<Map<String, dynamic>>.from(filas);
+    }
+  }
+
+  static String _norm(String t) {
+    const de = 'áàäâéèëêíìïîóòöôúùüûñ';
+    const a = 'aaaaeeeeiiiioooouuuun';
+    var r = t.toLowerCase();
+    for (var i = 0; i < de.length; i++) {
+      r = r.replaceAll(de[i], a[i]);
+    }
+    return r;
+  }
+
+  static String _rolNorm(dynamic r) => _norm((r ?? 'pendiente').toString().trim());
+
+  DateTime _fecha(Map<String, dynamic> u) =>
+      DateTime.tryParse((u['created_at'] ?? '').toString())?.toLocal() ?? DateTime.fromMillisecondsSinceEpoch(0);
+
+  String _fechaTexto(Map<String, dynamic> u) {
+    final f = _fecha(u);
+    if (f.millisecondsSinceEpoch == 0) return '';
+    String d2(int n) => n.toString().padLeft(2, '0');
+    return '${d2(f.day)}/${d2(f.month)}/${f.year}';
+  }
+
+  /// Aplica búsqueda (nombre, apellido, correo, N° de voluntario o de maquinista),
+  /// filtro por rol y orden.
+  List<Map<String, dynamic>> _filtrarYOrdenar() {
+    final palabras = _norm(_filtro).split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final lista = _usuarios.where((u) {
+      if (_filtroRol != 'todos' && _rolNorm(u['rol']) != _filtroRol) return false;
+      if (palabras.isEmpty) return true;
+      final texto = _norm('${u['nombre'] ?? ''} ${u['credencial'] ?? ''} ${u['numero_voluntario'] ?? ''} ${u['numero_maquinista'] ?? ''}');
+      return palabras.every(texto.contains); // "juan perez" encuentra "Juan Pérez González"
+    }).toList();
+    int porNombre(Map<String, dynamic> a, Map<String, dynamic> b) =>
+        _norm('${a['nombre'] ?? ''}').compareTo(_norm('${b['nombre'] ?? ''}'));
+    switch (_orden) {
+      case 'antiguos':
+        lista.sort((a, b) {
+          final c = _fecha(a).compareTo(_fecha(b));
+          return c != 0 ? c : porNombre(a, b);
+        });
+        break;
+      case 'nombre':
+        lista.sort(porNombre);
+        break;
+      default:
+        lista.sort((a, b) {
+          final c = _fecha(b).compareTo(_fecha(a));
+          return c != 0 ? c : porNombre(a, b);
+        });
+    }
+    return lista;
+  }
+
   bool get _soyAdmin => ((_perfil?['rol'] ?? '').toString().toLowerCase() == 'administrador');
 
   void _aviso(String texto) {
@@ -103,8 +188,9 @@ class _AdminUsuariosScreenState extends State<AdminUsuariosScreen> {
   }
 
   Future<void> _cambiarRol(Map<String, dynamic> usuario) async {
-    final rolActual = (usuario['rol'] ?? 'bombero').toString().toLowerCase().replaceAll('á', 'a');
-    String seleccionado = rolesDisponibles.contains(rolActual) ? rolActual : 'bombero';
+    final rolActual = _rolNorm(usuario['rol']);
+    // A una cuenta sin verificar se le propone "bombero" para verificarla con un toque.
+    String seleccionado = rolActual == 'pendiente' || !rolesDisponibles.contains(rolActual) ? 'bombero' : rolActual;
 
     final guardar = await showDialog<bool>(
       context: context,
@@ -117,6 +203,8 @@ class _AdminUsuariosScreenState extends State<AdminUsuariosScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text((usuario['credencial'] ?? '').toString(), style: const TextStyle(color: AppColors.textoSecundario, fontSize: 12)),
+              if ((usuario['numero_voluntario'] ?? '').toString().isNotEmpty)
+                Text('N° de voluntario: ${usuario['numero_voluntario']}', style: const TextStyle(color: AppColors.textoSecundario, fontSize: 12)),
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
                 value: seleccionado,
@@ -204,15 +292,11 @@ class _AdminUsuariosScreenState extends State<AdminUsuariosScreen> {
     }
 
     final miId = _perfil?['id'];
-    final visibles = _usuarios.where((u) {
-      if (_filtro.isEmpty) return true;
-      final texto = '${u['nombre'] ?? ''} ${u['credencial'] ?? ''}'.toLowerCase();
-      return texto.contains(_filtro);
-    }).toList();
+    final visibles = _filtrarYOrdenar();
 
     final conteo = <String, int>{};
     for (final u in _usuarios) {
-      final r = (u['rol'] ?? 'bombero').toString().toLowerCase().replaceAll('á', 'a');
+      final r = _rolNorm(u['rol']);
       conteo[r] = (conteo[r] ?? 0) + 1;
     }
 
@@ -262,10 +346,50 @@ class _AdminUsuariosScreenState extends State<AdminUsuariosScreen> {
           ),
           const SizedBox(height: 10),
           TextField(
-            decoration: decoracionCampo('Buscar por nombre o correo', prefixIcon: const Icon(Icons.search)),
-            onChanged: (v) => setState(() => _filtro = v.trim().toLowerCase()),
+            decoration: decoracionCampo(
+              'Buscar por nombre, apellido, correo o N° de voluntario',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _filtro.isEmpty
+                  ? null
+                  : IconButton(icon: const Icon(Icons.clear), onPressed: () => setState(() => _filtro = '')),
+            ),
+            controller: _buscador,
+            onChanged: (v) => setState(() => _filtro = v.trim()),
           ),
           const SizedBox(height: 10),
+          LayoutBuilder(builder: (context, c) {
+            final filtroRol = DropdownButtonFormField<String>(
+              value: _filtroRol,
+              isExpanded: true,
+              decoration: decoracionCampo('Rol'),
+              items: [
+                const DropdownMenuItem(value: 'todos', child: Text('Todos los roles')),
+                ...rolesDisponibles.map((r) => DropdownMenuItem(value: r, child: Text(etiquetaRol(r)))),
+              ],
+              onChanged: (v) => setState(() => _filtroRol = v ?? 'todos'),
+            );
+            final orden = DropdownButtonFormField<String>(
+              value: _orden,
+              isExpanded: true,
+              decoration: decoracionCampo('Ordenar'),
+              items: const [
+                DropdownMenuItem(value: 'nuevos', child: Text('Más nuevos primero')),
+                DropdownMenuItem(value: 'antiguos', child: Text('Más antiguos primero')),
+                DropdownMenuItem(value: 'nombre', child: Text('Nombre (A-Z)')),
+              ],
+              onChanged: (v) => setState(() => _orden = v ?? 'nuevos'),
+            );
+            if (c.maxWidth < 420) {
+              return Column(children: [filtroRol, const SizedBox(height: 10), orden]);
+            }
+            return Row(children: [Expanded(child: filtroRol), const SizedBox(width: 10), Expanded(child: orden)]);
+          }),
+          const SizedBox(height: 6),
+          Text(
+            '${visibles.length} de ${_usuarios.length} personas',
+            style: const TextStyle(color: AppColors.textoSecundario, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
           if (visibles.isEmpty)
             const Padding(
               padding: EdgeInsets.all(24),
@@ -273,7 +397,7 @@ class _AdminUsuariosScreenState extends State<AdminUsuariosScreen> {
             ),
           ...visibles.map((u) {
             final esYo = u['id'] == miId;
-            final rol = (u['rol'] ?? 'bombero').toString();
+            final rol = _rolNorm(u['rol']);
             final nombre = (u['nombre'] ?? 'Sin nombre').toString();
             return Container(
               margin: const EdgeInsets.only(bottom: 10),
@@ -284,7 +408,16 @@ class _AdminUsuariosScreenState extends State<AdminUsuariosScreen> {
                   child: Text(nombre.isNotEmpty ? nombre[0].toUpperCase() : '?', style: const TextStyle(color: Colors.white)),
                 ),
                 title: Text(esYo ? '$nombre (tú)' : nombre, style: const TextStyle(color: AppColors.textoPrincipal, fontWeight: FontWeight.bold)),
-                subtitle: Text((u['credencial'] ?? '').toString(), style: const TextStyle(color: AppColors.textoSecundario, fontSize: 12)),
+                subtitle: Text(
+                  [
+                    (u['credencial'] ?? '').toString(),
+                    if ((u['numero_voluntario'] ?? '').toString().isNotEmpty) 'N° voluntario ${u['numero_voluntario']}',
+                    if ((u['numero_maquinista'] ?? '').toString().isNotEmpty) 'N° maquinista ${u['numero_maquinista']}',
+                    if (_fechaTexto(u).isNotEmpty) 'Registro: ${_fechaTexto(u)}',
+                  ].where((t) => t.isNotEmpty).join('\n'),
+                  style: const TextStyle(color: AppColors.textoSecundario, fontSize: 12),
+                ),
+                isThreeLine: true,
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [

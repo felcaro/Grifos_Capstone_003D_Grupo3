@@ -36,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _db = SupabaseService();
 
   Map<String, dynamic>? _perfil;
+  bool _perfilCargado = false; // false hasta el primer intento de leer el perfil
   int _alertasCarros = 0;
 
   @override
@@ -53,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
       perfil = null;
     }
     try {
+      if (!Permisos.deRol(perfil?['rol']).verificado) throw StateError('sin acceso');
       final carros = await _db.obtenerCarros();
       alertas = carros.where((c) => alertasActivas(c).isNotEmpty).length;
     } catch (_) {
@@ -61,49 +63,36 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     setState(() {
       _perfil = perfil;
+      _perfilCargado = true;
       _alertasCarros = alertas;
     });
   }
 
-  bool _modalAbierto = false;
-
   Future<void> _abrir(Widget pantalla) async {
-    if (_modalAbierto) return;
-    _modalAbierto = true;
-    try {
-      await Navigator.push(context, MaterialPageRoute(builder: (_) => pantalla));
-      if (mounted) _cargar(); // al volver, se actualizan los avisos
-    } finally {
-      if (mounted) _modalAbierto = false;
-    }
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => pantalla));
+    if (mounted) _cargar(); // al volver, se actualizan los avisos
   }
 
-  Future<void> _confirmarSalir() async {
-    if (_modalAbierto) return;
-    _modalAbierto = true;
-    try {
-      await showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text('Cerrar sesión', style: TextStyle(color: AppColors.textoPrincipal)),
-          content: const Text('¿Seguro que quieres salir de tu cuenta?', style: TextStyle(color: AppColors.textoSecundario)),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: AppColors.rojo),
-              onPressed: () async {
-                Navigator.pop(context);
-                await AuthService.signOut(); // AuthGate muestra el login solo
-              },
-              child: const Text('Salir'),
-            ),
-          ],
-        ),
-      );
-    } finally {
-      if (mounted) _modalAbierto = false;
-    }
+  void _confirmarSalir() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('Cerrar sesión', style: TextStyle(color: AppColors.textoPrincipal)),
+        content: const Text('¿Seguro que quieres salir de tu cuenta?', style: TextStyle(color: AppColors.textoSecundario)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.rojo),
+            onPressed: () async {
+              Navigator.pop(context);
+              await AuthService.signOut(); // AuthGate muestra el login solo
+            },
+            child: const Text('Salir'),
+          ),
+        ],
+      ),
+    );
   }
 
   Permisos get _permisos => Permisos.deRol(_perfil?['rol']);
@@ -196,89 +185,140 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 14),
 
+                if (!_perfilCargado)
+                  const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator(color: AppColors.rojo)))
+                else if (_perfil == null)
+                  _avisoPerfil(
+                    icono: Icons.cloud_off,
+                    titulo: 'No se pudo cargar tu perfil',
+                    texto: 'Revisa tu conexión e inténtalo de nuevo.',
+                  )
+                else if (!_permisos.verificado)
+                  _avisoPerfil(
+                    icono: Icons.hourglass_top,
+                    titulo: 'Tu cuenta está pendiente de verificación',
+                    texto: 'Un administrador de tu compañía debe confirmar que eres bombero voluntario y asignarte un rol. '
+                        'Mientras tanto no puedes ver ni modificar información. Cuando te verifiquen, pulsa «Actualizar».',
+                  )
+                else ...[
                 // ---- avisos de carros ----
-                if (_alertasCarros > 0)
+                  if (_alertasCarros > 0)
+                    InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => _abrir(const InventarioCarrosScreen()),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 14),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                '$_alertasCarros carro${_alertasCarros == 1 ? '' : 's'} con revisión técnica o mantención por atender',
+                                style: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            Icon(Icons.chevron_right, color: Colors.red.shade700),
+                          ],
+                        ),
+                      ),
+                    ),
+  
+                  // ---- acceso principal: el mapa ----
                   InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () => _abrir(const InventarioCarrosScreen()),
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => _abrir(const MapaPrincipal()),
                     child: Container(
-                      margin: const EdgeInsets.only(bottom: 14),
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.red.shade200),
+                        color: AppColors.rojo,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 3))],
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              '$_alertasCarros carro${_alertasCarros == 1 ? '' : 's'} con revisión técnica o mantención por atender',
-                              style: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.w600),
+                          const Icon(Icons.map, color: Colors.white, size: 44),
+                          const SizedBox(width: 16),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Mapa de grifos', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                                SizedBox(height: 2),
+                                Text('Ubicar el grifo más cercano y ver su estado',
+                                    style: TextStyle(color: Colors.white70, fontSize: 13)),
+                              ],
                             ),
                           ),
-                          Icon(Icons.chevron_right, color: Colors.red.shade700),
+                          const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
                         ],
                       ),
                     ),
                   ),
-
-                // ---- acceso principal: el mapa ----
-                InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: () => _abrir(const MapaPrincipal()),
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: AppColors.rojo,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 3))],
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.map, color: Colors.white, size: 44),
-                        const SizedBox(width: 16),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Mapa de grifos', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                              SizedBox(height: 2),
-                              Text('Ubicar el grifo más cercano y ver su estado',
-                                  style: TextStyle(color: Colors.white70, fontSize: 13)),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
-                      ],
-                    ),
+                  const SizedBox(height: 18),
+                  const Text('Otras funciones',
+                      style: TextStyle(color: AppColors.textoPrincipal, fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+  
+                  // ---- resto de funciones ----
+                  LayoutBuilder(
+                    builder: (context, c) {
+                      final columnas = c.maxWidth >= 640 ? 3 : 2;
+                      const espacio = 12.0;
+                      final ancho = (c.maxWidth - espacio * (columnas - 1)) / columnas;
+                      return Wrap(
+                        spacing: espacio,
+                        runSpacing: espacio,
+                        children: _opciones.map((o) => SizedBox(width: ancho, child: _tarjetaOpcion(o))).toList(),
+                      );
+                    },
                   ),
-                ),
-                const SizedBox(height: 18),
-                const Text('Otras funciones',
-                    style: TextStyle(color: AppColors.textoPrincipal, fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-
-                // ---- resto de funciones ----
-                LayoutBuilder(
-                  builder: (context, c) {
-                    final columnas = c.maxWidth >= 640 ? 3 : 2;
-                    const espacio = 12.0;
-                    final ancho = (c.maxWidth - espacio * (columnas - 1)) / columnas;
-                    return Wrap(
-                      spacing: espacio,
-                      runSpacing: espacio,
-                      children: _opciones.map((o) => SizedBox(width: ancho, child: _tarjetaOpcion(o))).toList(),
-                    );
-                  },
-                ),
+                ],
                 const SizedBox(height: 24),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _avisoPerfil({required IconData icono, required String titulo, required String texto}) {
+    final numero = (_perfil?['numero_voluntario'] ?? '').toString();
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: decoracionTarjeta(),
+      child: Column(
+        children: [
+          Icon(icono, size: 48, color: AppColors.rojo),
+          const SizedBox(height: 12),
+          Text(titulo,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textoPrincipal, fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text(texto, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textoSecundario)),
+          if (numero.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('N° de voluntario registrado: $numero', style: const TextStyle(color: AppColors.textoSecundario, fontSize: 12)),
+          ],
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.rojo),
+            onPressed: () async {
+              Permisos.limpiar();
+              setState(() => _perfilCargado = false);
+              await _cargar();
+            },
+            icon: const Icon(Icons.refresh),
+            label: const Text('Actualizar'),
+          ),
+        ],
       ),
     );
   }
